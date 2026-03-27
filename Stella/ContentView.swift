@@ -24,42 +24,40 @@ struct ContentView: View {
     @State private var authMessageIsError = false
 
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.07, green: 0.10, blue: 0.23),
-                    Color(red: 0.14, green: 0.30, blue: 0.58),
-                    Color(red: 0.13, green: 0.59, blue: 0.62)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-
-            Circle()
-                .fill(.white.opacity(0.14))
-                .frame(width: 240, height: 240)
-                .offset(x: 130, y: -280)
-                .blur(radius: 2)
-
-            Circle()
-                .fill(.cyan.opacity(0.22))
-                .frame(width: 220, height: 220)
-                .offset(x: -160, y: 260)
-                .blur(radius: 6)
+        GeometryReader { geo in
+            let width = geo.size.width
+            let height = geo.size.height
+            let topInset = geo.safeAreaInsets.top
+            let bottomInset = geo.safeAreaInsets.bottom
+            let horizontalPadding = max(14, width * 0.045)
+            let contentWidth = max(0, width - (horizontalPadding * 2))
+            let cardWidth = min(contentWidth, 480)
+            let headingSize = max(34, min(width * 0.11, 52))
+            let headerTop = max(24, min(height * 0.05, 56)) + topInset * 0.35
+            let sectionSpacing = max(16, min(height * 0.025, 28))
+            let cardPadding = max(16, min(width * 0.05, 28))
+            let cardCorner = max(20, min(width * 0.06, 28))
+            let controlHeight = max(46, min(height * 0.068, 58))
+            let inputVertical = max(10, min(height * 0.014, 13))
+            let inputHorizontal = max(12, min(width * 0.035, 16))
+            let titleSpacing = max(6, min(height * 0.011, 10))
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 22) {
-                    VStack(spacing: 8) {
+                VStack(spacing: sectionSpacing) {
+                    VStack(spacing: titleSpacing) {
                         Text("Stella")
-                            .font(.system(size: 42, weight: .bold, design: .rounded))
+                            .font(.system(size: headingSize, weight: .semibold, design: .default))
+                            .tracking(0.4)
                             .foregroundStyle(.white)
+                            .multilineTextAlignment(.center)
 
                         Text("Welcome back. Let's get you in.")
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.85))
+                            .font(.system(size: max(13, min(width * 0.038, 17)), weight: .regular, design: .default))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .multilineTextAlignment(.center)
                     }
-                    .padding(.top, 36)
+                    .frame(maxWidth: cardWidth)
+                    .padding(.top, headerTop)
 
                     Picker("Auth Mode", selection: $authMode) {
                         ForEach(AuthMode.allCases, id: \.self) { mode in
@@ -67,50 +65,121 @@ struct ContentView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .padding(.horizontal, 8)
+                    .frame(maxWidth: cardWidth)
+                    .padding(6)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(.white.opacity(0.22), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.18), radius: 14, x: 0, y: 8)
 
                     Group {
                         if authMode == .login {
-                            loginCard
-                                .transition(.move(edge: .leading).combined(with: .opacity))
+                            loginCard(
+                                cardPadding: cardPadding,
+                                cardCorner: cardCorner,
+                                controlHeight: controlHeight,
+                                inputHorizontal: inputHorizontal,
+                                inputVertical: inputVertical,
+                                labelSize: max(12, min(width * 0.033, 14))
+                            )
+                            .transition(.move(edge: .leading).combined(with: .opacity))
                         } else {
-                            signupCard
-                                .transition(.move(edge: .trailing).combined(with: .opacity))
+                            signupCard(
+                                cardPadding: cardPadding,
+                                cardCorner: cardCorner,
+                                controlHeight: controlHeight,
+                                inputHorizontal: inputHorizontal,
+                                inputVertical: inputVertical,
+                                labelSize: max(12, min(width * 0.033, 14))
+                            )
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
                         }
                     }
+                    .frame(maxWidth: cardWidth)
                     .animation(.spring(response: 0.35, dampingFraction: 0.86), value: authMode)
 
                     if !authMessage.isEmpty {
                         Text(authMessage)
-                            .font(.footnote.weight(.medium))
+                            .font(.system(size: 14, weight: .medium, design: .default))
                             .foregroundStyle(authMessageIsError ? .red : .green)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 10)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: cardWidth, alignment: .center)
                     }
                 }
-                .padding(.horizontal, 18)
-                .padding(.bottom, 22)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, horizontalPadding)
+                .padding(.bottom, max(18, height * 0.03) + bottomInset * 0.4)
+            }
+            .background {
+                ZStack {
+                    Color.black
+                        .ignoresSafeArea()
+
+                    Image("img_02")
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(
+                            width: (width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing) * 1.08,
+                            height: (height + topInset + bottomInset) * 1.08
+                        )
+                        .clipped()
+                        .ignoresSafeArea()
+
+                    Color.black.opacity(0.45)
+                        .ignoresSafeArea()
+
+                    Circle()
+                        .fill(.white.opacity(0.06))
+                        .frame(width: width * 0.62, height: width * 0.62)
+                        .offset(x: width * 0.33, y: -height * 0.28)
+                        .blur(radius: 12)
+
+                    Circle()
+                        .fill(.blue.opacity(0.12))
+                        .frame(width: width * 0.52, height: width * 0.52)
+                        .offset(x: -width * 0.36, y: height * 0.29)
+                        .blur(radius: 14)
+                }
             }
         }
     }
 
-    private var loginCard: some View {
+    private func loginCard(
+        cardPadding: CGFloat,
+        cardCorner: CGFloat,
+        controlHeight: CGFloat,
+        inputHorizontal: CGFloat,
+        inputVertical: CGFloat,
+        labelSize: CGFloat
+    ) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Login")
-                .font(.title2.weight(.semibold))
+                .font(.system(size: 29, weight: .semibold, design: .default))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, alignment: .center)
 
             AuthInputField(
                 title: "Email",
                 placeholder: "name@email.com",
                 symbol: "envelope",
-                text: $loginEmail
+                text: $loginEmail,
+                labelSize: labelSize,
+                inputHorizontal: inputHorizontal,
+                inputVertical: inputVertical,
+                fieldCorner: controlHeight * 0.25
             )
 
             AuthSecureInputField(
                 title: "Password",
                 placeholder: "Enter password",
                 symbol: "lock",
-                text: $loginPassword
+                text: $loginPassword,
+                labelSize: labelSize,
+                inputHorizontal: inputHorizontal,
+                inputVertical: inputVertical,
+                fieldCorner: controlHeight * 0.25
             )
 
             Button {
@@ -123,13 +192,13 @@ struct ContentView: View {
                     }
 
                     Text("Sign In")
-                        .font(.headline)
+                        .font(.system(size: 17, weight: .semibold, design: .default))
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .frame(height: controlHeight)
                 .background(
                     LinearGradient(
-                        colors: [Color(red: 0.08, green: 0.56, blue: 0.96), Color(red: 0.01, green: 0.76, blue: 0.67)],
+                        colors: [Color(red: 0.11, green: 0.21, blue: 0.52), Color(red: 0.18, green: 0.33, blue: 0.72)],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -140,64 +209,100 @@ struct ContentView: View {
             .disabled(isLoading)
             .opacity(isLoading ? 0.85 : 1)
 
-            HStack {
-                Rectangle().frame(height: 1).foregroundStyle(.secondary.opacity(0.4))
-                Text("OR")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Rectangle().frame(height: 1).foregroundStyle(.secondary.opacity(0.4))
-            }
-
-            HStack(spacing: 12) {
-                SocialButton(label: "Apple", symbol: "apple.logo")
-                SocialButton(label: "Google", symbol: "globe")
-            }
-
             Button("Forgot password?") {}
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(Color(red: 0.02, green: 0.53, blue: 0.88))
-                .frame(maxWidth: .infinity, alignment: .trailing)
+                .font(.system(size: 14, weight: .medium, design: .default))
+                .foregroundStyle(.white.opacity(0.92))
+                .frame(maxWidth: .infinity, alignment: .center)
         }
-        .padding(20)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(.white.opacity(0.28), lineWidth: 1)
+        .padding(cardPadding)
+        .background(
+            RoundedRectangle(cornerRadius: cardCorner, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .opacity(0.62)
+                .overlay(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.16), Color.white.opacity(0.02)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: cardCorner, style: .continuous))
+                )
         )
+        .clipShape(RoundedRectangle(cornerRadius: cardCorner, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: cardCorner, style: .continuous)
+                .stroke(.white.opacity(0.22), lineWidth: 1)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: cardCorner, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.26), Color.white.opacity(0.06)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: .black.opacity(0.2), radius: 18, x: 0, y: 12)
     }
 
-    private var signupCard: some View {
+    private func signupCard(
+        cardPadding: CGFloat,
+        cardCorner: CGFloat,
+        controlHeight: CGFloat,
+        inputHorizontal: CGFloat,
+        inputVertical: CGFloat,
+        labelSize: CGFloat
+    ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Create Account")
-                .font(.title2.weight(.semibold))
+                .font(.system(size: 29, weight: .semibold, design: .default))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, alignment: .center)
 
             AuthInputField(
                 title: "Full Name",
                 placeholder: "Your full name",
                 symbol: "person",
-                text: $signupName
+                text: $signupName,
+                labelSize: labelSize,
+                inputHorizontal: inputHorizontal,
+                inputVertical: inputVertical,
+                fieldCorner: controlHeight * 0.25
             )
 
             AuthInputField(
                 title: "Email",
                 placeholder: "name@email.com",
                 symbol: "envelope",
-                text: $signupEmail
+                text: $signupEmail,
+                labelSize: labelSize,
+                inputHorizontal: inputHorizontal,
+                inputVertical: inputVertical,
+                fieldCorner: controlHeight * 0.25
             )
 
             AuthSecureInputField(
                 title: "Password",
                 placeholder: "Create password",
                 symbol: "lock",
-                text: $signupPassword
+                text: $signupPassword,
+                labelSize: labelSize,
+                inputHorizontal: inputHorizontal,
+                inputVertical: inputVertical,
+                fieldCorner: controlHeight * 0.25
             )
 
             AuthSecureInputField(
                 title: "Confirm Password",
                 placeholder: "Re-enter password",
                 symbol: "lock.shield",
-                text: $confirmPassword
+                text: $confirmPassword,
+                labelSize: labelSize,
+                inputHorizontal: inputHorizontal,
+                inputVertical: inputVertical,
+                fieldCorner: controlHeight * 0.25
             )
 
             Button {
@@ -210,13 +315,13 @@ struct ContentView: View {
                     }
 
                     Text("Create Account")
-                        .font(.headline)
+                        .font(.system(size: 17, weight: .semibold, design: .default))
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .frame(height: controlHeight)
                 .background(
                     LinearGradient(
-                        colors: [Color(red: 0.96, green: 0.45, blue: 0.22), Color(red: 0.97, green: 0.67, blue: 0.24)],
+                        colors: [Color(red: 0.94, green: 0.73, blue: 0.21), Color(red: 0.86, green: 0.56, blue: 0.11)],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -228,17 +333,43 @@ struct ContentView: View {
             .opacity(isLoading ? 0.85 : 1)
 
             Text("By continuing, you agree to our Terms and Privacy Policy.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 12, weight: .regular, design: .default))
+                .foregroundStyle(.white.opacity(0.78))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
                 .padding(.top, 2)
         }
-        .padding(20)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(.white.opacity(0.28), lineWidth: 1)
+        .padding(cardPadding)
+        .background(
+            RoundedRectangle(cornerRadius: cardCorner, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .opacity(0.62)
+                .overlay(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.16), Color.white.opacity(0.02)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: cardCorner, style: .continuous))
+                )
         )
+        .clipShape(RoundedRectangle(cornerRadius: cardCorner, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: cardCorner, style: .continuous)
+                .stroke(.white.opacity(0.22), lineWidth: 1)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: cardCorner, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.26), Color.white.opacity(0.06)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: .black.opacity(0.2), radius: 18, x: 0, y: 12)
     }
 
     private func loginUser() {
@@ -329,26 +460,43 @@ private struct AuthInputField: View {
     let placeholder: String
     let symbol: String
     @Binding var text: String
+    let labelSize: CGFloat
+    let inputHorizontal: CGFloat
+    let inputVertical: CGFloat
+    let fieldCorner: CGFloat
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(title)
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(.secondary)
+                .font(.system(size: labelSize, weight: .medium, design: .default))
+                .foregroundStyle(.white.opacity(0.9))
 
             HStack(spacing: 10) {
                 Image(systemName: symbol)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.78))
                     .frame(width: 18)
 
-                TextField(placeholder, text: $text)
+                TextField(
+                    "",
+                    text: $text,
+                    prompt: Text(placeholder).foregroundStyle(.white.opacity(0.72))
+                )
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .foregroundStyle(.white)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 11)
-            .background(Color.white.opacity(0.76))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, inputHorizontal)
+            .padding(.vertical, inputVertical)
+            .background(
+                RoundedRectangle(cornerRadius: fieldCorner, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.5)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: fieldCorner, style: .continuous)
+                    .stroke(.white.opacity(0.2), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: fieldCorner, style: .continuous))
         }
     }
 }
@@ -358,28 +506,42 @@ private struct AuthSecureInputField: View {
     let placeholder: String
     let symbol: String
     @Binding var text: String
+    let labelSize: CGFloat
+    let inputHorizontal: CGFloat
+    let inputVertical: CGFloat
+    let fieldCorner: CGFloat
     @State private var isRevealed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(title)
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(.secondary)
+                .font(.system(size: labelSize, weight: .medium, design: .default))
+                .foregroundStyle(.white.opacity(0.9))
 
             HStack(spacing: 10) {
                 Image(systemName: symbol)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.78))
                     .frame(width: 18)
 
                 Group {
                     if isRevealed {
-                        TextField(placeholder, text: $text)
+                        TextField(
+                            "",
+                            text: $text,
+                            prompt: Text(placeholder).foregroundStyle(.white.opacity(0.72))
+                        )
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                            .foregroundStyle(.white)
                     } else {
-                        SecureField(placeholder, text: $text)
+                        SecureField(
+                            "",
+                            text: $text,
+                            prompt: Text(placeholder).foregroundStyle(.white.opacity(0.72))
+                        )
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                            .foregroundStyle(.white)
                     }
                 }
 
@@ -387,35 +549,21 @@ private struct AuthSecureInputField: View {
                     isRevealed.toggle()
                 } label: {
                     Image(systemName: isRevealed ? "eye.slash" : "eye")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white.opacity(0.8))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 11)
-            .background(Color.white.opacity(0.76))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-    }
-}
-
-private struct SocialButton: View {
-    let label: String
-    let symbol: String
-
-    var body: some View {
-        Button {
-            // Frontend-only placeholder.
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: symbol)
-                Text(label)
-                    .font(.subheadline.weight(.semibold))
-            }
-            .foregroundStyle(.primary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(Color.white.opacity(0.65))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, inputHorizontal)
+            .padding(.vertical, inputVertical)
+            .background(
+                RoundedRectangle(cornerRadius: fieldCorner, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.5)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: fieldCorner, style: .continuous)
+                    .stroke(.white.opacity(0.2), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: fieldCorner, style: .continuous))
         }
     }
 }
