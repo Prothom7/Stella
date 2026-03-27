@@ -13,7 +13,7 @@ struct AuthBackgroundView: View {
             Color.black
                 .ignoresSafeArea()
 
-            Image("img_02")
+            Image("img_03")
                 .resizable()
                 .aspectRatio(contentMode: .fill)
                 .frame(
