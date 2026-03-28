@@ -48,6 +48,8 @@ struct ARAstronomyView: View {
 }
 
 private struct PlanetARContainerView: UIViewRepresentable {
+    private let defaultPlanetModelName = "ISS_stationary.usdz"
+
     func makeUIView(context: Context) -> ARView {
         let arView = ARView(frame: .zero)
 
@@ -58,14 +60,7 @@ private struct PlanetARContainerView: UIViewRepresentable {
 
         let anchor = AnchorEntity(world: [0, 0, -0.8])
 
-        let planetMesh = MeshResource.generateSphere(radius: 0.12)
-        let planetMaterial = SimpleMaterial(
-            color: UIColor(red: 0.22, green: 0.44, blue: 0.86, alpha: 1),
-            roughness: 0.25,
-            isMetallic: true
-        )
-
-        let planetEntity = ModelEntity(mesh: planetMesh, materials: [planetMaterial])
+        let planetEntity = makePlanetEntity()
         planetEntity.name = "planet"
 
         // Optional orbit ring for visual context around the planet.
@@ -77,12 +72,39 @@ private struct PlanetARContainerView: UIViewRepresentable {
         anchor.addChild(ringEntity)
         arView.scene.addAnchor(anchor)
 
+        planetEntity.generateCollisionShapes(recursive: true)
         arView.installGestures([.rotation, .scale], for: planetEntity)
 
         return arView
     }
 
     func updateUIView(_ uiView: ARView, context: Context) {}
+
+    private func makePlanetEntity() -> ModelEntity {
+        if let loadedModel = try? ModelEntity.loadModel(named: defaultPlanetModelName) {
+            // Normalize unknown model sizes so every planet appears at a comfortable AR size.
+            let bounds = loadedModel.visualBounds(relativeTo: nil)
+            let extents = bounds.extents
+            let maxDimension = max(extents.x, max(extents.y, extents.z))
+
+            if maxDimension > 0 {
+                let targetDiameter: Float = 0.24
+                let normalizedScale = targetDiameter / maxDimension
+                loadedModel.scale = SIMD3<Float>(repeating: normalizedScale)
+            }
+
+            return loadedModel
+        }
+
+        // Fallback keeps AR view functional until USDZ files are added to the app bundle.
+        let fallbackMesh = MeshResource.generateSphere(radius: 0.12)
+        let fallbackMaterial = SimpleMaterial(
+            color: UIColor(red: 0.22, green: 0.44, blue: 0.86, alpha: 1),
+            roughness: 0.25,
+            isMetallic: true
+        )
+        return ModelEntity(mesh: fallbackMesh, materials: [fallbackMaterial])
+    }
 }
 
 #Preview {
