@@ -10,7 +10,7 @@ struct AppRootView: View {
             if currentUser == nil {
                 AuthScreenView()
             } else {
-                ARAstronomyView()
+                DashboardView()
             }
         }
         .onAppear {
