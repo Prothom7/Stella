@@ -21,6 +21,42 @@ struct DashboardView: View {
                             .frame(maxWidth: .infinity, alignment: .center)
                     }
                     .padding(.horizontal, 20)
+
+                    NavigationLink {
+                        CelestialCalendarView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "calendar.badge.clock")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 44, height: 44)
+                                .background(Color.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Celestial Calendar")
+                                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.white)
+                                Text("Major astronomical events for the year")
+                                    .font(.system(size: 13, weight: .medium, design: .default))
+                                    .foregroundStyle(.white.opacity(0.84))
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.72))
+                        }
+                        .padding(14)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(.white.opacity(0.24), lineWidth: 1)
+                        )
+                        .shadow(color: .black.opacity(0.2), radius: 14, x: 0, y: 10)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
                     .padding(.top, 20)
                     .padding(.bottom, 8)
                     .background(
@@ -78,10 +114,12 @@ struct DashboardView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Sign Out") {
-                        try? Auth.auth().signOut()
+                    NavigationLink {
+                        ProfileView()
+                    } label: {
+                        Label("Profile", systemImage: "person.crop.circle")
+                            .font(.system(size: 14, weight: .semibold, design: .default))
                     }
-                    .font(.system(size: 14, weight: .semibold, design: .default))
                 }
             }
         }
