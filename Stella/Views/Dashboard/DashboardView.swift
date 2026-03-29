@@ -2,40 +2,77 @@ import SwiftUI
 import FirebaseAuth
 
 struct DashboardView: View {
-    private let lessons = LessonTopic.sampleLessons
+    private let lessonsByCategory = Dictionary(grouping: LessonTopic.sampleLessons, by: \ .category)
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Learning Dashboard")
-                            .font(.system(size: 33, weight: .bold, design: .rounded))
-                        Text("Explore planets, stars, NASA missions, and space stations in AR.")
+                VStack(spacing: 18) {
+                    VStack(spacing: 8) {
+                        Text("Stella-board")
+                            .font(.system(size: 36, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, alignment: .center)
+
+                        Text("Choose a lesson, learn the science, then open it in immersive AR.")
                             .font(.system(size: 15, weight: .medium, design: .default))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.white.opacity(0.9))
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, alignment: .center)
                     }
                     .padding(.horizontal, 20)
-                    .padding(.top, 16)
+                    .padding(.top, 20)
+                    .padding(.bottom, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(.ultraThinMaterial.opacity(0.5))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(.white.opacity(0.22), lineWidth: 1)
+                    )
+                    .padding(.horizontal, 16)
 
-                    ForEach(lessons) { lesson in
-                        NavigationLink(value: lesson) {
-                            LessonCard(lesson: lesson)
+                    ForEach(LessonCategory.allCases, id: \.self) { category in
+                        if let lessons = lessonsByCategory[category], !lessons.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: category.icon)
+                                        .foregroundStyle(.white.opacity(0.95))
+                                    Text(category.title)
+                                        .font(.system(size: 19, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(.white)
+                                }
+                                .padding(.horizontal, 6)
+
+                                ForEach(lessons) { lesson in
+                                    NavigationLink(value: lesson) {
+                                        LessonCard(lesson: lesson)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.horizontal, 16)
                         }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 16)
                     }
                 }
                 .padding(.bottom, 24)
             }
-            .background(
-                LinearGradient(
-                    colors: [Color(red: 0.95, green: 0.97, blue: 1.0), Color(red: 0.9, green: 0.94, blue: 0.99)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-            )
+            .background {
+                ZStack {
+                    Image("img_01")
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .ignoresSafeArea()
+
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.5), Color.black.opacity(0.28), Color.black.opacity(0.58)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .ignoresSafeArea()
+                }
+            }
             .navigationDestination(for: LessonTopic.self) { lesson in
                 LessonDetailView(lesson: lesson)
             }
@@ -62,16 +99,16 @@ private struct LessonCard: View {
                 .overlay(
                     Image(systemName: lesson.icon)
                         .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(lesson.tint)
+                        .foregroundStyle(.white)
                 )
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(lesson.title)
                     .font(.system(size: 18, weight: .semibold, design: .default))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(.white)
                 Text(lesson.subtitle)
                     .font(.system(size: 14, weight: .regular, design: .default))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.86))
                     .lineLimit(2)
             }
 
@@ -79,15 +116,15 @@ private struct LessonCard: View {
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.72))
         }
         .padding(14)
-        .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(.white.opacity(0.8), lineWidth: 1)
+                .stroke(.white.opacity(0.24), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 6)
+        .shadow(color: .black.opacity(0.2), radius: 14, x: 0, y: 10)
     }
 }
 
@@ -115,6 +152,7 @@ private struct LessonDetailView: View {
 
                 Text(lesson.summary)
                     .font(.system(size: 16, weight: .regular, design: .default))
+                    .foregroundStyle(.white.opacity(0.95))
 
                 Text("Key Facts")
                     .font(.system(size: 19, weight: .semibold, design: .default))
@@ -127,6 +165,7 @@ private struct LessonDetailView: View {
                             .padding(.top, 5)
                         Text(fact)
                             .font(.system(size: 15, weight: .regular, design: .default))
+                            .foregroundStyle(.white.opacity(0.94))
                     }
                 }
 
@@ -146,10 +185,57 @@ private struct LessonDetailView: View {
                 .padding(.top, 8)
             }
             .padding(20)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(.white.opacity(0.24), lineWidth: 1)
+            )
+            .padding(16)
         }
         .navigationTitle("Lesson")
         .navigationBarTitleDisplayMode(.inline)
-        .background(Color(red: 0.97, green: 0.98, blue: 1.0).ignoresSafeArea())
+        .background {
+            ZStack {
+                Image("img_01")
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .ignoresSafeArea()
+                Color.black.opacity(0.42).ignoresSafeArea()
+            }
+        }
+    }
+}
+
+private enum LessonCategory: String, CaseIterable, Hashable {
+    case planets
+    case stars
+    case celestialObjects
+    case manMadeMissions
+
+    var title: String {
+        switch self {
+        case .planets:
+            return "Planets"
+        case .stars:
+            return "Stars"
+        case .celestialObjects:
+            return "Celestial Objects"
+        case .manMadeMissions:
+            return "Man-Made Missions"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .planets:
+            return "globe.americas.fill"
+        case .stars:
+            return "star.fill"
+        case .celestialObjects:
+            return "sparkles"
+        case .manMadeMissions:
+            return "rocket.fill"
+        }
     }
 }
 
@@ -162,6 +248,7 @@ private struct LessonTopic: Hashable, Identifiable {
     let icon: String
     let tint: Color
     let arModelFileName: String
+    let category: LessonCategory
 
     static let sampleLessons: [LessonTopic] = [
         LessonTopic(
@@ -176,7 +263,8 @@ private struct LessonTopic: Hashable, Identifiable {
             ],
             icon: "globe.americas.fill",
             tint: Color.blue,
-            arModelFileName: "earth.usdz"
+            arModelFileName: "earth.usdz",
+            category: .planets
         ),
         LessonTopic(
             id: "mars",
@@ -190,7 +278,8 @@ private struct LessonTopic: Hashable, Identifiable {
             ],
             icon: "circle.hexagongrid.fill",
             tint: Color.red,
-            arModelFileName: "mars.usdz"
+            arModelFileName: "mars.usdz",
+            category: .planets
         ),
         LessonTopic(
             id: "sun",
@@ -204,7 +293,23 @@ private struct LessonTopic: Hashable, Identifiable {
             ],
             icon: "sun.max.fill",
             tint: Color.orange,
-            arModelFileName: "sun.usdz"
+            arModelFileName: "sun.usdz",
+            category: .stars
+        ),
+        LessonTopic(
+            id: "moon",
+            title: "The Moon",
+            subtitle: "Earth's natural satellite and nearest neighbor.",
+            summary: "The Moon influences ocean tides and records billions of years of solar system history on its cratered surface.",
+            facts: [
+                "The Moon is about 384,400 km from Earth on average.",
+                "It is tidally locked, so we mostly see one side.",
+                "Its gravity is about one-sixth of Earth's."
+            ],
+            icon: "moon.stars.fill",
+            tint: Color.cyan,
+            arModelFileName: "moon.usdz",
+            category: .celestialObjects
         ),
         LessonTopic(
             id: "iss",
@@ -218,7 +323,8 @@ private struct LessonTopic: Hashable, Identifiable {
             ],
             icon: "antenna.radiowaves.left.and.right",
             tint: Color.indigo,
-            arModelFileName: "ISS_stationary.usdz"
+            arModelFileName: "ISS_stationary.usdz",
+            category: .manMadeMissions
         ),
         LessonTopic(
             id: "nasa-missions",
@@ -232,7 +338,8 @@ private struct LessonTopic: Hashable, Identifiable {
             ],
             icon: "rocket.fill",
             tint: Color.purple,
-            arModelFileName: "ISS_stationary.usdz"
+            arModelFileName: "ISS_stationary.usdz",
+            category: .manMadeMissions
         )
     ]
 }
