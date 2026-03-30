@@ -247,7 +247,12 @@ private struct MonthCalendarPage: View {
             if !section.events.isEmpty {
                 VStack(spacing: 10) {
                     ForEach(section.events) { event in
-                        eventRow(event)
+                        NavigationLink {
+                            CelestialEventDetailView(event: event, year: year)
+                        } label: {
+                            eventRow(event)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -319,6 +324,102 @@ private struct MonthCalendarPage: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(.white.opacity(0.14), lineWidth: 1)
         )
+    }
+}
+
+private struct CelestialEventDetailView: View {
+    let event: CelestialEvent
+    let year: Int
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                VStack(spacing: 8) {
+                    Image(systemName: event.icon)
+                        .font(.system(size: 42, weight: .semibold))
+                        .foregroundStyle(.white)
+
+                    Text(event.title)
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+
+                    Text("\(event.date), \(year)")
+                        .font(.system(size: 15, weight: .semibold, design: .default))
+                        .foregroundStyle(.white.opacity(0.88))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.white.opacity(0.12), in: Capsule())
+                }
+                .frame(maxWidth: .infinity)
+                .padding(18)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(.ultraThinMaterial.opacity(0.42))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(.white.opacity(0.18), lineWidth: 1)
+                )
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("About This Event")
+                        .font(.system(size: 20, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+
+                    Text(event.detail)
+                        .font(.system(size: 16, weight: .regular, design: .default))
+                        .foregroundStyle(.white.opacity(0.9))
+
+                    Divider().overlay(.white.opacity(0.2))
+
+                    Text("Viewing Tips")
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+
+                    tipRow(icon: "moon.stars", text: "Use a dark-sky location away from city lights.")
+                    tipRow(icon: "clock", text: "Check local weather and view during the event peak window.")
+                    tipRow(icon: "camera", text: "Use night mode or a tripod for clearer observations and photos.")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(.white.opacity(0.15), lineWidth: 1)
+                )
+            }
+            .padding(16)
+        }
+        .navigationTitle("Event Details")
+        .navigationBarTitleDisplayMode(.inline)
+        .background {
+            ZStack {
+                Image("img_01")
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .ignoresSafeArea()
+
+                LinearGradient(
+                    colors: [Color.black.opacity(0.5), Color.black.opacity(0.3), Color.black.opacity(0.58)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            }
+        }
+    }
+
+    private func tipRow(icon: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(.white.opacity(0.92))
+                .padding(.top, 2)
+
+            Text(text)
+                .font(.system(size: 15, weight: .regular, design: .default))
+                .foregroundStyle(.white.opacity(0.88))
+        }
     }
 }
 
