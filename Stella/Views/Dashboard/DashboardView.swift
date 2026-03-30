@@ -1,5 +1,4 @@
 import SwiftUI
-import FirebaseAuth
 
 struct DashboardView: View {
     private let lessonsByCategory = Dictionary(grouping: LessonTopic.sampleLessons, by: \ .category)
@@ -25,42 +24,8 @@ struct DashboardView: View {
 
                     topNavBar
 
-                    Group {
-                        switch selectedTab {
-                        case .learning:
-                            learningContent
-                        case .calendar:
-                            quickAccessCard(
-                                icon: "calendar.badge.clock",
-                                title: "Celestial Calendar",
-                                subtitle: "Track major astronomical events and set reminders.",
-                                buttonTitle: "Open Calendar"
-                            ) {
-                                CelestialCalendarView()
-                            }
-                        case .finder:
-                            quickAccessCard(
-                                icon: "sparkles.square.filled.on.square",
-                                title: "Constellation Finder",
-                                subtitle: "Detect constellations from sky or image and overlay them.",
-                                buttonTitle: "Open Finder"
-                            ) {
-                                ConstellationFinderView()
-                            }
-                        case .profile:
-                            quickAccessCard(
-                                icon: "person.crop.circle",
-                                title: "Profile",
-                                subtitle: "Manage your account and sign out securely.",
-                                buttonTitle: "Open Profile"
-                            ) {
-                                ProfileView()
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    .animation(.easeInOut(duration: 0.2), value: selectedTab)
+                    learningContent
+                        .padding(.horizontal, 16)
                 }
                 .padding(.bottom, 24)
             }
@@ -97,31 +62,28 @@ struct DashboardView: View {
 
     private var topNavBar: some View {
         HStack(spacing: 10) {
-            ForEach(DashboardTab.allCases, id: \.self) { tab in
-                Button {
-                    selectedTab = tab
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 12, weight: .bold))
-                        Text(tab.title)
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .lineLimit(1)
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(selectedTab == tab ? Color.white.opacity(0.26) : Color.black.opacity(0.24))
-                    )
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .stroke(.white.opacity(selectedTab == tab ? 0.42 : 0.24), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
+            tabButton(.learning)
+
+            NavigationLink {
+                CelestialCalendarView()
+            } label: {
+                tabPill(.calendar, selected: false)
             }
+            .buttonStyle(.plain)
+
+            NavigationLink {
+                ConstellationFinderView()
+            } label: {
+                tabPill(.finder, selected: false)
+            }
+            .buttonStyle(.plain)
+
+            NavigationLink {
+                ProfileView()
+            } label: {
+                tabPill(.profile, selected: false)
+            }
+            .buttonStyle(.plain)
         }
         .padding(10)
         .background(
@@ -137,28 +99,6 @@ struct DashboardView: View {
 
     private var learningContent: some View {
         VStack(spacing: 18) {
-            NavigationLink {
-                CelestialCalendarView()
-            } label: {
-                featureRow(
-                    icon: "calendar.badge.clock",
-                    title: "Celestial Calendar",
-                    subtitle: "Major astronomical events for the year"
-                )
-            }
-            .buttonStyle(.plain)
-
-            NavigationLink {
-                ConstellationFinderView()
-            } label: {
-                featureRow(
-                    icon: "sparkles.square.filled.on.square",
-                    title: "Constellation Finder",
-                    subtitle: "Use AR overlay to match constellations in the sky"
-                )
-            }
-            .buttonStyle(.plain)
-
             ForEach(LessonCategory.allCases, id: \.self) { category in
                 if let lessons = lessonsByCategory[category], !lessons.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
@@ -183,79 +123,33 @@ struct DashboardView: View {
         }
     }
 
-    private func quickAccessCard<Destination: View>(
-        icon: String,
-        title: String,
-        subtitle: String,
-        buttonTitle: String,
-        @ViewBuilder destination: () -> Destination
-    ) -> some View {
-        VStack(spacing: 14) {
-            Image(systemName: icon)
-                .font(.system(size: 28, weight: .semibold))
-                .foregroundStyle(.white)
-
-            Text(title)
-                .font(.system(size: 24, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-
-            Text(subtitle)
-                .font(.system(size: 14, weight: .medium, design: .default))
-                .foregroundStyle(.white.opacity(0.92))
-                .multilineTextAlignment(.center)
-
-            NavigationLink {
-                destination()
-            } label: {
-                Text(buttonTitle)
-                    .font(.system(size: 15, weight: .semibold, design: .default))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(Color.white.opacity(0.2), in: Capsule())
-            }
-            .buttonStyle(.plain)
+    private func tabButton(_ tab: DashboardTab) -> some View {
+        Button {
+            selectedTab = tab
+        } label: {
+            tabPill(tab, selected: selectedTab == tab)
         }
-        .frame(maxWidth: .infinity)
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.black.opacity(0.3))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(.white.opacity(0.24), lineWidth: 1)
-        )
+        .buttonStyle(.plain)
     }
 
-    private func featureRow(icon: String, title: String, subtitle: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background(Color.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                Text(subtitle)
-                    .font(.system(size: 13, weight: .medium, design: .default))
-                    .foregroundStyle(.white.opacity(0.9))
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.78))
+    private func tabPill(_ tab: DashboardTab, selected: Bool) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: tab.icon)
+                .font(.system(size: 12, weight: .bold))
+            Text(tab.title)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .lineLimit(1)
         }
-        .padding(14)
-        .background(Color.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            Capsule(style: .continuous)
+                .fill(selected ? Color.white.opacity(0.26) : Color.black.opacity(0.24))
+        )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(.white.opacity(0.24), lineWidth: 1)
+            Capsule(style: .continuous)
+                .stroke(.white.opacity(selected ? 0.42 : 0.24), lineWidth: 1)
         )
     }
 }
@@ -291,12 +185,12 @@ private struct LessonCard: View {
     var body: some View {
         HStack(spacing: 14) {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(lesson.tint.opacity(0.18))
+                .fill(Color.black.opacity(0.38))
                 .frame(width: 56, height: 56)
                 .overlay(
                     Image(systemName: lesson.icon)
                         .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.white.opacity(0.97))
                 )
 
             VStack(alignment: .leading, spacing: 5) {
@@ -304,8 +198,8 @@ private struct LessonCard: View {
                     .font(.system(size: 18, weight: .semibold, design: .default))
                     .foregroundStyle(.white)
                 Text(lesson.subtitle)
-                    .font(.system(size: 14, weight: .regular, design: .default))
-                    .foregroundStyle(.white.opacity(0.86))
+                    .font(.system(size: 14, weight: .medium, design: .default))
+                    .foregroundStyle(.white.opacity(0.92))
                     .lineLimit(2)
             }
 
@@ -313,15 +207,14 @@ private struct LessonCard: View {
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.72))
+                .foregroundStyle(.white.opacity(0.82))
         }
         .padding(14)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Color.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(.white.opacity(0.24), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.2), radius: 14, x: 0, y: 10)
     }
 }
 
@@ -341,9 +234,10 @@ private struct LessonDetailView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(lesson.title)
                             .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
                         Text(lesson.subtitle)
                             .font(.system(size: 15, weight: .medium, design: .default))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.white.opacity(0.9))
                     }
                 }
 
@@ -353,6 +247,7 @@ private struct LessonDetailView: View {
 
                 Text("Key Facts")
                     .font(.system(size: 19, weight: .semibold, design: .default))
+                    .foregroundStyle(.white)
                     .padding(.top, 8)
 
                 ForEach(lesson.facts, id: \.self) { fact in
@@ -382,10 +277,10 @@ private struct LessonDetailView: View {
                 .padding(.top, 8)
             }
             .padding(20)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(Color.black.opacity(0.34), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(.white.opacity(0.24), lineWidth: 1)
+                    .stroke(.white.opacity(0.26), lineWidth: 1)
             )
             .padding(16)
         }
@@ -393,11 +288,16 @@ private struct LessonDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .background {
             ZStack {
-                Image("img_01")
+                Image("img_04")
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .ignoresSafeArea()
-                Color.black.opacity(0.42).ignoresSafeArea()
+                LinearGradient(
+                    colors: [Color.black.opacity(0.5), Color.black.opacity(0.34), Color.black.opacity(0.58)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
             }
         }
     }
