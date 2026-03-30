@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseFirestore
+import UserNotifications
 
 struct CelestialCalendarView: View {
     private let year = Calendar.current.component(.year, from: Date())
@@ -10,28 +11,25 @@ struct CelestialCalendarView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 14) {
+            VStack(spacing: 16) {
                 introCard
 
                 if isLoading {
                     ProgressView("Loading yearly events...")
                         .tint(.white)
                         .foregroundStyle(.white)
+                        .font(.system(size: 14, weight: .semibold, design: .default))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .background(
                             Capsule(style: .continuous)
-                                .fill(.ultraThinMaterial.opacity(0.45))
+                                .fill(Color.black.opacity(0.42))
                         )
                         .overlay(
                             Capsule(style: .continuous)
-                                .stroke(.white.opacity(0.2), lineWidth: 1)
+                                .stroke(.white.opacity(0.3), lineWidth: 1)
                         )
                 }
-
-                Text("Swipe left or right to move month-by-month")
-                    .font(.system(size: 12, weight: .semibold, design: .default))
-                    .foregroundStyle(.white.opacity(0.72))
 
                 TabView(selection: $selectedMonthIndex) {
                     ForEach(monthSections) { section in
@@ -42,6 +40,7 @@ struct CelestialCalendarView: View {
                 .tabViewStyle(.page(indexDisplayMode: .always))
                 .frame(height: 610)
             }
+            .frame(maxWidth: .infinity, alignment: .center)
             .padding(16)
         }
         .onAppear {
@@ -53,13 +52,13 @@ struct CelestialCalendarView: View {
         .navigationBarTitleDisplayMode(.inline)
         .background {
             ZStack {
-                Image("img_01")
+                Image("img_04")
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .ignoresSafeArea()
 
                 LinearGradient(
-                    colors: [Color.black.opacity(0.5), Color.black.opacity(0.3), Color.black.opacity(0.58)],
+                    colors: [Color.black.opacity(0.5), Color.black.opacity(0.34), Color.black.opacity(0.58)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -83,26 +82,25 @@ struct CelestialCalendarView: View {
     private var introCard: some View {
         VStack(alignment: .center, spacing: 8) {
             Text("\(year) Sky Highlights")
-                .font(.system(size: 27, weight: .bold, design: .rounded))
+                .font(.system(size: 30, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
 
             Text("Track meteor showers, eclipses, and major conjunctions throughout the year.")
-                .font(.system(size: 14, weight: .medium, design: .default))
-                .foregroundStyle(.white.opacity(0.86))
+                .font(.system(size: 15, weight: .semibold, design: .default))
+                .foregroundStyle(.white.opacity(0.96))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.ultraThinMaterial.opacity(0.42))
+                .fill(Color.black.opacity(0.46))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(.white.opacity(0.2), lineWidth: 1)
+                .stroke(.white.opacity(0.3), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.2), radius: 14, x: 0, y: 10)
     }
 
     private func loadEventsFromFirestore() {
@@ -168,6 +166,8 @@ struct CelestialCalendarView: View {
 private struct MonthCalendarPage: View {
     let section: CelestialEventSection
     let year: Int
+    @State private var reminderAlertMessage = ""
+    @State private var isReminderAlertPresented = false
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 7)
     private let weekdaySymbols = ["S", "M", "T", "W", "T", "F", "S"]
@@ -207,28 +207,22 @@ private struct MonthCalendarPage: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .center, spacing: 14) {
             HStack(spacing: 8) {
                 Image(systemName: section.icon)
                     .foregroundStyle(.white)
-                Text(section.month)
+                Text("\(section.month) \(year)")
                     .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
-                Spacer()
-                Text("\(year)")
-                    .font(.system(size: 14, weight: .semibold, design: .default))
-                    .foregroundStyle(.white.opacity(0.84))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.white.opacity(0.15), in: Capsule())
             }
+            .frame(maxWidth: .infinity, alignment: .center)
 
             VStack(spacing: 8) {
                 LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(weekdaySymbols, id: \.self) { symbol in
                         Text(symbol)
-                            .font(.system(size: 12, weight: .semibold, design: .default))
-                            .foregroundStyle(.white.opacity(0.8))
+                            .font(.system(size: 13, weight: .bold, design: .default))
+                            .foregroundStyle(.white.opacity(0.96))
                             .frame(maxWidth: .infinity)
                     }
 
@@ -238,54 +232,75 @@ private struct MonthCalendarPage: View {
                 }
             }
             .padding(12)
-            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(Color.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(.white.opacity(0.14), lineWidth: 1)
+                    .stroke(.white.opacity(0.2), lineWidth: 1)
             )
 
             if !section.events.isEmpty {
                 VStack(spacing: 10) {
                     ForEach(section.events) { event in
-                        NavigationLink {
-                            CelestialEventDetailView(event: event, year: year)
-                        } label: {
-                            eventRow(event)
+                        HStack(spacing: 10) {
+                            NavigationLink {
+                                CelestialEventDetailView(event: event, year: year)
+                            } label: {
+                                eventRow(event)
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                scheduleReminder(for: event)
+                            } label: {
+                                Image(systemName: "bell.badge")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 38, height: 38)
+                                    .background(Color.black.opacity(0.44), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .stroke(.white.opacity(0.3), lineWidth: 1)
+                                    )
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
 
             Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial.opacity(0.4))
+                .fill(Color.black.opacity(0.32))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(.white.opacity(0.18), lineWidth: 1)
+                .stroke(.white.opacity(0.22), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.18), radius: 12, x: 0, y: 8)
+        .alert("Reminder", isPresented: $isReminderAlertPresented) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(reminderAlertMessage)
+        }
     }
 
     private func dayCellView(_ cell: CalendarDayCell) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(cell.hasEvents ? Color.white.opacity(0.2) : Color.white.opacity(0.045))
+                .fill(cell.hasEvents ? Color.white.opacity(0.28) : Color.black.opacity(0.26))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(.white.opacity(cell.hasEvents ? 0.24 : 0.1), lineWidth: 0.8)
+                        .stroke(.white.opacity(cell.hasEvents ? 0.34 : 0.2), lineWidth: 0.9)
                 )
 
             if let day = cell.day {
                 VStack(spacing: 3) {
                     Text("\(day)")
-                        .font(.system(size: 13, weight: cell.hasEvents ? .semibold : .regular, design: .default))
-                        .foregroundStyle(.white)
+                        .font(.system(size: 14, weight: cell.hasEvents ? .bold : .medium, design: .default))
+                        .foregroundStyle(.white.opacity(0.98))
 
                     if cell.hasEvents {
                         Circle()
@@ -302,28 +317,37 @@ private struct MonthCalendarPage: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 8) {
                 Text(event.date)
-                    .font(.system(size: 13, weight: .semibold, design: .default))
-                    .foregroundStyle(.white.opacity(0.92))
+                    .font(.system(size: 13, weight: .bold, design: .default))
+                    .foregroundStyle(.white.opacity(0.97))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(Color.white.opacity(0.14), in: Capsule())
 
                 Text(event.title)
-                    .font(.system(size: 16, weight: .semibold, design: .default))
+                    .font(.system(size: 17, weight: .bold, design: .default))
                     .foregroundStyle(.white)
             }
 
             Text(event.detail)
-                .font(.system(size: 14, weight: .regular, design: .default))
-                .foregroundStyle(.white.opacity(0.84))
+                .font(.system(size: 14, weight: .medium, design: .default))
+                .foregroundStyle(.white.opacity(0.94))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(Color.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(.white.opacity(0.14), lineWidth: 1)
+            .stroke(.white.opacity(0.2), lineWidth: 1)
         )
+    }
+
+    private func scheduleReminder(for event: CelestialEvent) {
+        ReminderScheduler.schedule(event: event, year: year) { isSuccess, message in
+            DispatchQueue.main.async {
+                reminderAlertMessage = message
+                isReminderAlertPresented = true
+            }
+        }
     }
 }
 
@@ -344,7 +368,7 @@ private struct CelestialEventDetailView: View {
                         .foregroundStyle(.white)
                         .multilineTextAlignment(.center)
 
-                    Text("\(event.date), \(year)")
+                    Text("\(event.date) \(year)")
                         .font(.system(size: 15, weight: .semibold, design: .default))
                         .foregroundStyle(.white.opacity(0.88))
                         .padding(.horizontal, 12)
@@ -355,11 +379,11 @@ private struct CelestialEventDetailView: View {
                 .padding(18)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(.ultraThinMaterial.opacity(0.42))
+                        .fill(Color.black.opacity(0.34))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(.white.opacity(0.18), lineWidth: 1)
+                        .stroke(.white.opacity(0.22), lineWidth: 1)
                 )
 
                 VStack(alignment: .leading, spacing: 12) {
@@ -383,10 +407,10 @@ private struct CelestialEventDetailView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
-                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .background(Color.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(.white.opacity(0.15), lineWidth: 1)
+                    .stroke(.white.opacity(0.2), lineWidth: 1)
                 )
             }
             .padding(16)
@@ -395,13 +419,13 @@ private struct CelestialEventDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .background {
             ZStack {
-                Image("img_01")
+                Image("img_04")
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .ignoresSafeArea()
 
                 LinearGradient(
-                    colors: [Color.black.opacity(0.5), Color.black.opacity(0.3), Color.black.opacity(0.58)],
+                    colors: [Color.black.opacity(0.5), Color.black.opacity(0.34), Color.black.opacity(0.58)],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -546,6 +570,49 @@ extension CelestialEventSection: Identifiable {
     var id: Int { monthIndex }
 }
 
+private enum ReminderScheduler {
+    static func schedule(event: CelestialEvent, year: Int, completion: @escaping (Bool, String) -> Void) {
+        guard let eventDate = event.reminderDate(in: year) else {
+            completion(false, "Could not set reminder for this event date.")
+            return
+        }
+
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            if let error {
+                completion(false, "Notification permission error: \(error.localizedDescription)")
+                return
+            }
+
+            guard granted else {
+                completion(false, "Notifications are disabled. Enable them in Settings to use reminders.")
+                return
+            }
+
+            let content = UNMutableNotificationContent()
+            content.title = "Celestial Reminder"
+            content.body = "\(event.title) is today. Check the sky conditions tonight."
+            content.sound = .default
+
+            let triggerDate = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: eventDate)
+            let trigger = UNCalendarNotificationTrigger(dateMatching: triggerDate, repeats: false)
+            let identifier = "celestial-\(event.id)-\(year)"
+            let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+
+            center.add(request) { addError in
+                if let addError {
+                    completion(false, "Failed to schedule reminder: \(addError.localizedDescription)")
+                } else {
+                    let formatter = DateFormatter()
+                    formatter.dateStyle = .medium
+                    formatter.timeStyle = .short
+                    completion(true, "Reminder set for \(formatter.string(from: eventDate)).")
+                }
+            }
+        }
+    }
+}
+
 private struct CelestialEvent: Identifiable {
     let id: String
     let monthIndex: Int
@@ -667,6 +734,27 @@ private struct CelestialEvent: Identifiable {
             .compactMap { Int($0) }
 
         return numbers.first
+    }
+
+    func reminderDate(in year: Int) -> Date? {
+        var components = DateComponents()
+        components.year = year
+        components.month = monthIndex
+        components.day = daySort
+        components.hour = 9
+        components.minute = 0
+
+        let calendar = Calendar.current
+        guard let scheduledDate = calendar.date(from: components) else {
+            return nil
+        }
+
+        if scheduledDate < Date() {
+            components.year = year + 1
+            return calendar.date(from: components)
+        }
+
+        return scheduledDate
     }
 }
 

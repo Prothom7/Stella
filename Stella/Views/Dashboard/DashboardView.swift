@@ -3,6 +3,7 @@ import FirebaseAuth
 
 struct DashboardView: View {
     private let lessonsByCategory = Dictionary(grouping: LessonTopic.sampleLessons, by: \ .category)
+    @State private var selectedTab: DashboardTab = .learning
 
     var body: some View {
         NavigationStack {
@@ -22,122 +23,56 @@ struct DashboardView: View {
                     }
                     .padding(.horizontal, 20)
 
-                    NavigationLink {
-                        CelestialCalendarView()
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "calendar.badge.clock")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 44, height: 44)
-                                .background(Color.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    topNavBar
 
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Celestial Calendar")
-                                    .font(.system(size: 18, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.white)
-                                Text("Major astronomical events for the year")
-                                    .font(.system(size: 13, weight: .medium, design: .default))
-                                    .foregroundStyle(.white.opacity(0.84))
+                    Group {
+                        switch selectedTab {
+                        case .learning:
+                            learningContent
+                        case .calendar:
+                            quickAccessCard(
+                                icon: "calendar.badge.clock",
+                                title: "Celestial Calendar",
+                                subtitle: "Track major astronomical events and set reminders.",
+                                buttonTitle: "Open Calendar"
+                            ) {
+                                CelestialCalendarView()
                             }
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.72))
-                        }
-                        .padding(14)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(.white.opacity(0.24), lineWidth: 1)
-                        )
-                        .shadow(color: .black.opacity(0.2), radius: 14, x: 0, y: 10)
-                    }
-                    .buttonStyle(.plain)
-
-                    NavigationLink {
-                        ConstellationFinderView()
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "sparkles.square.filled.on.square")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 44, height: 44)
-                                .background(Color.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Constellation Finder")
-                                    .font(.system(size: 18, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.white)
-                                Text("Use AR overlay to match constellations in the sky")
-                                    .font(.system(size: 13, weight: .medium, design: .default))
-                                    .foregroundStyle(.white.opacity(0.84))
+                        case .finder:
+                            quickAccessCard(
+                                icon: "sparkles.square.filled.on.square",
+                                title: "Constellation Finder",
+                                subtitle: "Detect constellations from sky or image and overlay them.",
+                                buttonTitle: "Open Finder"
+                            ) {
+                                ConstellationFinderView()
                             }
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.72))
+                        case .profile:
+                            quickAccessCard(
+                                icon: "person.crop.circle",
+                                title: "Profile",
+                                subtitle: "Manage your account and sign out securely.",
+                                buttonTitle: "Open Profile"
+                            ) {
+                                ProfileView()
+                            }
                         }
-                        .padding(14)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(.white.opacity(0.24), lineWidth: 1)
-                        )
-                        .shadow(color: .black.opacity(0.2), radius: 14, x: 0, y: 10)
                     }
-                    .buttonStyle(.plain)
                     .padding(.horizontal, 16)
-                    .padding(.top, 20)
-                    .padding(.bottom, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(.ultraThinMaterial.opacity(0.5))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(.white.opacity(0.22), lineWidth: 1)
-                    )
-                    .padding(.horizontal, 16)
-
-                    ForEach(LessonCategory.allCases, id: \.self) { category in
-                        if let lessons = lessonsByCategory[category], !lessons.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: category.icon)
-                                        .foregroundStyle(.white.opacity(0.95))
-                                    Text(category.title)
-                                        .font(.system(size: 19, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(.white)
-                                }
-                                .padding(.horizontal, 6)
-
-                                ForEach(lessons) { lesson in
-                                    NavigationLink(value: lesson) {
-                                        LessonCard(lesson: lesson)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                        }
-                    }
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .animation(.easeInOut(duration: 0.2), value: selectedTab)
                 }
                 .padding(.bottom, 24)
             }
             .background {
                 ZStack {
-                    Image("img_01")
+                    Image("img_05")
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .ignoresSafeArea()
 
                     LinearGradient(
-                        colors: [Color.black.opacity(0.5), Color.black.opacity(0.28), Color.black.opacity(0.58)],
+                        colors: [Color.black.opacity(0.5), Color.black.opacity(0.3), Color.black.opacity(0.56)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -157,6 +92,195 @@ struct DashboardView: View {
                     }
                 }
             }
+        }
+    }
+
+    private var topNavBar: some View {
+        HStack(spacing: 10) {
+            ForEach(DashboardTab.allCases, id: \.self) { tab in
+                Button {
+                    selectedTab = tab
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: 12, weight: .bold))
+                        Text(tab.title)
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(selectedTab == tab ? Color.white.opacity(0.26) : Color.black.opacity(0.24))
+                    )
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(.white.opacity(selectedTab == tab ? 0.42 : 0.24), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.black.opacity(0.3))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(.white.opacity(0.26), lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
+    }
+
+    private var learningContent: some View {
+        VStack(spacing: 18) {
+            NavigationLink {
+                CelestialCalendarView()
+            } label: {
+                featureRow(
+                    icon: "calendar.badge.clock",
+                    title: "Celestial Calendar",
+                    subtitle: "Major astronomical events for the year"
+                )
+            }
+            .buttonStyle(.plain)
+
+            NavigationLink {
+                ConstellationFinderView()
+            } label: {
+                featureRow(
+                    icon: "sparkles.square.filled.on.square",
+                    title: "Constellation Finder",
+                    subtitle: "Use AR overlay to match constellations in the sky"
+                )
+            }
+            .buttonStyle(.plain)
+
+            ForEach(LessonCategory.allCases, id: \.self) { category in
+                if let lessons = lessonsByCategory[category], !lessons.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 8) {
+                            Image(systemName: category.icon)
+                                .foregroundStyle(.white.opacity(0.95))
+                            Text(category.title)
+                                .font(.system(size: 19, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.horizontal, 6)
+
+                        ForEach(lessons) { lesson in
+                            NavigationLink(value: lesson) {
+                                LessonCard(lesson: lesson)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func quickAccessCard<Destination: View>(
+        icon: String,
+        title: String,
+        subtitle: String,
+        buttonTitle: String,
+        @ViewBuilder destination: () -> Destination
+    ) -> some View {
+        VStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(.white)
+
+            Text(title)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+
+            Text(subtitle)
+                .font(.system(size: 14, weight: .medium, design: .default))
+                .foregroundStyle(.white.opacity(0.92))
+                .multilineTextAlignment(.center)
+
+            NavigationLink {
+                destination()
+            } label: {
+                Text(buttonTitle)
+                    .font(.system(size: 15, weight: .semibold, design: .default))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.white.opacity(0.2), in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.black.opacity(0.3))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(.white.opacity(0.24), lineWidth: 1)
+        )
+    }
+
+    private func featureRow(icon: String, title: String, subtitle: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(Color.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                Text(subtitle)
+                    .font(.system(size: 13, weight: .medium, design: .default))
+                    .foregroundStyle(.white.opacity(0.9))
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.78))
+        }
+        .padding(14)
+        .background(Color.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(.white.opacity(0.24), lineWidth: 1)
+        )
+    }
+}
+
+private enum DashboardTab: CaseIterable {
+    case learning
+    case calendar
+    case finder
+    case profile
+
+    var title: String {
+        switch self {
+        case .learning: return "Learning"
+        case .calendar: return "Calendar"
+        case .finder: return "Finder"
+        case .profile: return "Profile"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .learning: return "book.closed"
+        case .calendar: return "calendar"
+        case .finder: return "sparkles"
+        case .profile: return "person"
         }
     }
 }
