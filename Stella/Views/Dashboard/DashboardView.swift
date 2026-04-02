@@ -65,6 +65,13 @@ struct DashboardView: View {
             tabButton(.learning)
 
             NavigationLink {
+                TonightSkyView()
+            } label: {
+                tabPill(.tonight, selected: false)
+            }
+            .buttonStyle(.plain)
+
+            NavigationLink {
                 CelestialCalendarView()
             } label: {
                 tabPill(.calendar, selected: false)
@@ -85,15 +92,7 @@ struct DashboardView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.black.opacity(0.3))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(.white.opacity(0.26), lineWidth: 1)
-        )
+        .frame(maxWidth: .infinity, alignment: .center)
         .padding(.horizontal, 16)
     }
 
@@ -156,6 +155,7 @@ struct DashboardView: View {
 
 private enum DashboardTab: CaseIterable {
     case learning
+    case tonight
     case calendar
     case finder
     case profile
@@ -163,6 +163,7 @@ private enum DashboardTab: CaseIterable {
     var title: String {
         switch self {
         case .learning: return "Learning"
+        case .tonight: return "Tonight"
         case .calendar: return "Calendar"
         case .finder: return "Finder"
         case .profile: return "Profile"
@@ -172,6 +173,7 @@ private enum DashboardTab: CaseIterable {
     var icon: String {
         switch self {
         case .learning: return "book.closed"
+        case .tonight: return "moon.stars.fill"
         case .calendar: return "calendar"
         case .finder: return "sparkles"
         case .profile: return "person"
