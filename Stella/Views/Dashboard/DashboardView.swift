@@ -79,6 +79,13 @@ struct DashboardView: View {
             .buttonStyle(.plain)
 
             NavigationLink {
+                NewsView()
+            } label: {
+                tabPill(.news, selected: false)
+            }
+            .buttonStyle(.plain)
+
+            NavigationLink {
                 ConstellationFinderView()
             } label: {
                 tabPill(.finder, selected: false)
@@ -157,6 +164,7 @@ private enum DashboardTab: CaseIterable {
     case learning
     case tonight
     case calendar
+    case news
     case finder
     case profile
 
@@ -165,6 +173,7 @@ private enum DashboardTab: CaseIterable {
         case .learning: return "Learning"
         case .tonight: return "Tonight"
         case .calendar: return "Calendar"
+        case .news: return "News"
         case .finder: return "Finder"
         case .profile: return "Profile"
         }
@@ -175,6 +184,7 @@ private enum DashboardTab: CaseIterable {
         case .learning: return "book.closed"
         case .tonight: return "moon.stars.fill"
         case .calendar: return "calendar"
+        case .news: return "newspaper"
         case .finder: return "sparkles"
         case .profile: return "person"
         }
