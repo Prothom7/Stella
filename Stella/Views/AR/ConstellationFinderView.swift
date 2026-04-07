@@ -1,7 +1,6 @@
 import SwiftUI
 import RealityKit
 import ARKit
-import PhotosUI
 import CoreImage
 
 struct ConstellationFinderView: View {
@@ -10,8 +9,9 @@ struct ConstellationFinderView: View {
     @State private var overlayRotation: Double = 0
     @State private var detectionStatus = "Point at the sky and tap Analyze Live Sky."
     @State private var isAnalyzing = false
-    @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var snapshotRequestID = 0
+    @State private var detectedResult: ConstellationDetectionResult?
+    @State private var showDetectionDialog = false
 
     var body: some View {
         ZStack {
@@ -58,16 +58,19 @@ struct ConstellationFinderView: View {
         }
         .navigationTitle("Constellation Finder")
         .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: selectedPhotoItem) { _, item in
-            guard let item else { return }
-            Task {
-                if let data = try? await item.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    await MainActor.run {
-                        runDetection(on: image)
-                    }
-                }
+        .alert(
+            detectedResult?.constellation.name ?? "Constellation Found",
+            isPresented: $showDetectionDialog,
+            presenting: detectedResult
+        ) { result in
+            Button("Use Overlay") {
+                selectedConstellation = result.constellation
+                overlayRotation = result.rotationDegrees
+                overlayScale = max(0.72, min(result.scale, 1.5))
             }
+            Button("Keep Current", role: .cancel) {}
+        } message: { result in
+            Text("Detected \(result.constellation.name) with \(Int(result.confidence * 100))% confidence.")
         }
     }
 
@@ -77,7 +80,7 @@ struct ConstellationFinderView: View {
                 .font(.system(size: 27, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
 
-            Text("Point your phone at the sky and align the glowing shape with stars.")
+            Text("Point your phone at the sky and analyze live stars for smart matching.")
                 .font(.system(size: 13, weight: .medium, design: .default))
                 .foregroundStyle(.white.opacity(0.88))
                 .multilineTextAlignment(.center)
@@ -136,37 +139,28 @@ struct ConstellationFinderView: View {
 
     private var actionPanel: some View {
         VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                Button {
-                    guard !isAnalyzing else { return }
-                    isAnalyzing = true
-                    detectionStatus = "Analyzing live sky..."
-                    snapshotRequestID += 1
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "camera.viewfinder")
-                        Text("Analyze Live Sky")
-                    }
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Button {
+                guard !isAnalyzing else { return }
+                isAnalyzing = true
+                detectionStatus = "Analyzing live sky..."
+                snapshotRequestID += 1
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkle.magnifyingglass")
+                    Text("Analyze Live Sky")
                 }
-                .disabled(isAnalyzing)
-
-                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "photo")
-                        Text("Analyze Image")
-                    }
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity)
+                .background(Color.white.opacity(0.22), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
+            .disabled(isAnalyzing)
+
+            Text("Live camera analysis only. Image upload removed for cleaner, faster detection.")
+                .font(.system(size: 11, weight: .medium, design: .default))
+                .foregroundStyle(.white.opacity(0.76))
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 7) {
                 if isAnalyzing {
@@ -246,6 +240,8 @@ struct ConstellationFinderView: View {
                 selectedConstellation = result.constellation
                 overlayRotation = result.rotationDegrees
                 overlayScale = max(0.7, min(result.scale, 1.5))
+                detectedResult = result
+                showDetectionDialog = true
 
                 let confidencePercent = Int(result.confidence * 100)
                 detectionStatus = "Identified \(result.constellation.name) with \(confidencePercent)% confidence."
@@ -350,26 +346,34 @@ private final class ConstellationDetector {
             return nil
         }
 
-        var bestResult: ConstellationDetectionResult?
+        var scoredResults: [ConstellationDetectionResult] = []
 
         for constellation in ConstellationGuide.allCases {
             if let match = bestMatch(for: constellation.normalizedPoints, in: stars) {
-                if bestResult == nil || match.confidence > (bestResult?.confidence ?? 0) {
-                    bestResult = ConstellationDetectionResult(
+                scoredResults.append(
+                    ConstellationDetectionResult(
                         constellation: constellation,
                         confidence: match.confidence,
                         scale: match.scale,
                         rotationDegrees: match.rotationDegrees
                     )
-                }
+                )
             }
         }
 
-        guard let result = bestResult, result.confidence > 0.45 else {
+        guard !scoredResults.isEmpty else { return nil }
+        scoredResults.sort { $0.confidence > $1.confidence }
+
+        guard let bestResult = scoredResults.first else { return nil }
+        let secondBest = scoredResults.dropFirst().first
+
+        // Stronger gate: require good confidence and enough margin from runner-up.
+        let margin = bestResult.confidence - (secondBest?.confidence ?? 0)
+        guard bestResult.confidence > 0.56, margin > 0.08 else {
             return nil
         }
 
-        return result
+        return bestResult
     }
 
     private func resize(image: UIImage, to size: CGSize) -> UIImage? {
@@ -404,13 +408,8 @@ private final class ConstellationDetector {
 
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
 
-        struct Candidate {
-            let point: CGPoint
-            let brightness: Double
-        }
-
-        var candidates: [Candidate] = []
-        candidates.reserveCapacity(1000)
+        var brightnessValues: [Double] = []
+        brightnessValues.reserveCapacity((width / 2) * (height / 2))
 
         for y in stride(from: 0, to: height, by: 2) {
             for x in stride(from: 0, to: width, by: 2) {
@@ -419,23 +418,70 @@ private final class ConstellationDetector {
                 let g = Double(raw[i + 1])
                 let b = Double(raw[i + 2])
                 let brightness = (0.299 * r) + (0.587 * g) + (0.114 * b)
-
-                if brightness > 222 {
-                    let px = CGFloat(x) / CGFloat(width)
-                    let py = CGFloat(y) / CGFloat(height)
-                    candidates.append(Candidate(point: CGPoint(x: px, y: py), brightness: brightness))
-                }
+                brightnessValues.append(brightness)
             }
         }
 
-        if candidates.isEmpty {
+        if brightnessValues.isEmpty {
             return nil
         }
+
+        brightnessValues.sort()
+        let p90Index = Int(Double(brightnessValues.count - 1) * 0.9)
+        let p98Index = Int(Double(brightnessValues.count - 1) * 0.98)
+        let p90 = brightnessValues[max(0, min(p90Index, brightnessValues.count - 1))]
+        let p98 = brightnessValues[max(0, min(p98Index, brightnessValues.count - 1))]
+        let dynamicThreshold = max(170.0, (p90 * 0.55) + (p98 * 0.45))
+
+        struct Candidate {
+            let point: CGPoint
+            let brightness: Double
+        }
+
+        var candidates: [Candidate] = []
+        candidates.reserveCapacity(1000)
+
+        for y in stride(from: 2, to: height - 2, by: 2) {
+            for x in stride(from: 2, to: width - 2, by: 2) {
+                let i = (y * width + x) * bytesPerPixel
+                let r = Double(raw[i])
+                let g = Double(raw[i + 1])
+                let b = Double(raw[i + 2])
+                let brightness = (0.299 * r) + (0.587 * g) + (0.114 * b)
+
+                guard brightness >= dynamicThreshold else { continue }
+
+                // Keep local maxima only, which removes many noisy bright pixels.
+                var isLocalMax = true
+                for ny in -2...2 {
+                    for nx in -2...2 where !(nx == 0 && ny == 0) {
+                        let nIdx = ((y + ny) * width + (x + nx)) * bytesPerPixel
+                        let nr = Double(raw[nIdx])
+                        let ng = Double(raw[nIdx + 1])
+                        let nb = Double(raw[nIdx + 2])
+                        let nBrightness = (0.299 * nr) + (0.587 * ng) + (0.114 * nb)
+                        if nBrightness > brightness {
+                            isLocalMax = false
+                            break
+                        }
+                    }
+                    if !isLocalMax { break }
+                }
+
+                guard isLocalMax else { continue }
+
+                let px = CGFloat(x) / CGFloat(width)
+                let py = CGFloat(y) / CGFloat(height)
+                candidates.append(Candidate(point: CGPoint(x: px, y: py), brightness: brightness))
+            }
+        }
+
+        if candidates.isEmpty { return nil }
 
         candidates.sort { $0.brightness > $1.brightness }
 
         var selected: [CGPoint] = []
-        let minDistance: CGFloat = 0.04
+        let minDistance: CGFloat = 0.035
 
         for candidate in candidates {
             let tooClose = selected.contains { existing in
@@ -446,7 +492,7 @@ private final class ConstellationDetector {
                 selected.append(candidate.point)
             }
 
-            if selected.count >= 35 {
+            if selected.count >= 40 {
                 break
             }
         }
@@ -486,7 +532,7 @@ private final class ConstellationDetector {
                         if sLen < 0.0001 { continue }
 
                         let scale = sLen / tLen
-                        if scale < 0.3 || scale > 3.0 { continue }
+                        if scale < 0.35 || scale > 2.6 { continue }
 
                         let angle = atan2(sv.dy, sv.dx) - atan2(tv.dy, tv.dx)
                         let cosA = cos(angle)
@@ -513,15 +559,16 @@ private final class ConstellationDetector {
                                 if d < nearest { nearest = d }
                             }
 
-                            if nearest < 0.055 {
+                            if nearest < 0.048 {
                                 matchedCount += 1
                                 totalDistance += nearest
                             }
                         }
 
                         let base = Double(matchedCount) / Double(template.count)
-                        let proximityBonus = matchedCount > 0 ? max(0, 0.3 - (totalDistance / Double(matchedCount))) : 0
-                        let score = base + proximityBonus
+                        let proximityBonus = matchedCount > 0 ? max(0, 0.28 - (totalDistance / Double(matchedCount))) : 0
+                        let coverageBonus = min(0.18, Double(matchedCount) * 0.02)
+                        let score = base + proximityBonus + coverageBonus
 
                         if score > bestScore {
                             bestScore = score

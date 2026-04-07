@@ -139,11 +139,6 @@ struct ProfileView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
         .padding(.horizontal, 16)
-        .background(Color.black.opacity(0.34), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .stroke(.white.opacity(0.26), lineWidth: 1)
-        )
     }
 
     private var profileInfoCard: some View {

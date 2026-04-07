@@ -1,7 +1,6 @@
 import SwiftUI
 import RealityKit
 import ARKit
-import FirebaseAuth
 import FirebaseFirestore
 
 struct ARAstronomyView: View {
@@ -34,21 +33,6 @@ struct ARAstronomyView: View {
                     .font(.system(size: 14, weight: .medium, design: .default))
                     .foregroundStyle(.white.opacity(0.9))
                     .multilineTextAlignment(.center)
-
-                Button {
-                    try? Auth.auth().signOut()
-                } label: {
-                    Text("Sign Out")
-                        .font(.system(size: 14, weight: .semibold, design: .default))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .foregroundStyle(.white)
-                        .background(Color.black.opacity(0.35), in: Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(.white.opacity(0.35), lineWidth: 1)
-                        )
-                }
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
@@ -160,6 +144,7 @@ private struct PlanetARContainerView: UIViewRepresentable {
         let configuration = ARWorldTrackingConfiguration()
         configuration.planeDetection = [.horizontal, .vertical]
         configuration.environmentTexturing = .automatic
+        configuration.isAutoFocusEnabled = true
         arView.session.run(configuration)
 
         let anchor = AnchorEntity(world: [0, 0, -0.8])
@@ -181,23 +166,35 @@ private struct PlanetARContainerView: UIViewRepresentable {
         context.coordinator.arView = arView
         context.coordinator.modelEntity = planetEntity
         context.coordinator.setInitialScale(from: planetEntity.scale)
+        context.coordinator.initialScale = planetEntity.scale
+        context.coordinator.initialPosition = planetEntity.position
+        context.coordinator.initialOrientation = planetEntity.orientation
 
         let tapRecognizer = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
+        let doubleTapRecognizer = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleDoubleTap(_:)))
+        doubleTapRecognizer.numberOfTapsRequired = 2
         let panRecognizer = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePan(_:)))
         panRecognizer.maximumNumberOfTouches = 1
         let pinchRecognizer = UIPinchGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePinch(_:)))
         let rotationRecognizer = UIRotationGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleRotation(_:)))
+        let longPressRecognizer = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleLongPress(_:)))
+        longPressRecognizer.minimumPressDuration = 0.45
 
         tapRecognizer.delegate = context.coordinator
+        doubleTapRecognizer.delegate = context.coordinator
         panRecognizer.delegate = context.coordinator
         pinchRecognizer.delegate = context.coordinator
         rotationRecognizer.delegate = context.coordinator
+        longPressRecognizer.delegate = context.coordinator
+        tapRecognizer.require(toFail: doubleTapRecognizer)
         tapRecognizer.require(toFail: panRecognizer)
 
         arView.addGestureRecognizer(tapRecognizer)
+        arView.addGestureRecognizer(doubleTapRecognizer)
         arView.addGestureRecognizer(panRecognizer)
         arView.addGestureRecognizer(pinchRecognizer)
         arView.addGestureRecognizer(rotationRecognizer)
+        arView.addGestureRecognizer(longPressRecognizer)
 
         return arView
     }
@@ -205,22 +202,65 @@ private struct PlanetARContainerView: UIViewRepresentable {
     func updateUIView(_ uiView: ARView, context: Context) {}
 
     private func makePlanetEntity() -> ModelEntity {
-        if let loadedModel = try? ModelEntity.loadModel(named: modelFileName) {
-            // Normalize unknown model sizes so every planet appears at a comfortable AR size.
-            let bounds = loadedModel.visualBounds(relativeTo: nil)
-            let extents = bounds.extents
-            let maxDimension = max(extents.x, max(extents.y, extents.z))
-
-            if maxDimension > 0 {
-                let targetDiameter: Float = 0.24
-                let normalizedScale = targetDiameter / maxDimension
-                loadedModel.scale = SIMD3<Float>(repeating: normalizedScale)
+        var loadedModel: ModelEntity?
+        let baseFileName = modelFileName.hasSuffix(".usdz") ? String(modelFileName.dropLast(5)) : modelFileName
+        
+        print("[AR DEBUG] Attempting to load model: \(modelFileName)")
+        
+        // PRIORITY: Load from PlanetModels subfolder via URL (most reliable method)
+        if let url = Bundle.main.url(forResource: baseFileName, withExtension: "usdz", subdirectory: "PlanetModels") {
+            do {
+                print("[AR DEBUG] Found URL in PlanetModels: \(url.path)")
+                let model = try ModelEntity.loadModel(contentsOf: url)
+                print("[AR DEBUG] ✓ Successfully loaded from PlanetModels URL")
+                loadedModel = model
+            } catch {
+                print("[AR DEBUG] ✗ Failed to load from PlanetModels URL: \(error)")
             }
-
-            return loadedModel
+        } else {
+            print("[AR DEBUG] ✗ Could not find URL in PlanetModels")
+        }
+        
+        // Fallback: Try root bundle
+        if loadedModel == nil, let url = Bundle.main.url(forResource: baseFileName, withExtension: "usdz") {
+            do {
+                print("[AR DEBUG] Found URL in bundle root: \(url.path)")
+                let model = try ModelEntity.loadModel(contentsOf: url)
+                print("[AR DEBUG] ✓ Successfully loaded from root bundle URL")
+                loadedModel = model
+            } catch {
+                print("[AR DEBUG] ✗ Failed to load from root URL: \(error)")
+            }
+        }
+        
+        // Fallback: Try named loading
+        if loadedModel == nil, let model = try? ModelEntity.loadModel(named: baseFileName) {
+            print("[AR DEBUG] ✓ Loaded via named:\(baseFileName)")
+            loadedModel = model
+        }
+        
+        // Fallback: Try with full filename including extension
+        if loadedModel == nil, let model = try? ModelEntity.loadModel(named: modelFileName) {
+            print("[AR DEBUG] ✓ Loaded via named:\(modelFileName)")
+            loadedModel = model
+        }
+        
+        if let loadedModel {
+            // Recenter and normalize scale so models authored with odd pivots still appear in view.
+            return normalizedVisibleModel(from: loadedModel)
         }
 
         // Fallback keeps AR view functional until USDZ files are added to the app bundle.
+        print("[AR DEBUG] ✗ All load attempts failed. Using fallback sphere.")
+        print("[AR DEBUG] Checking bundle resources for '\(baseFileName)'...")
+        
+        // Debug: List available resources
+        if let resourcePath = Bundle.main.resourcePath,
+           let contents = try? FileManager.default.contentsOfDirectory(atPath: resourcePath) {
+            let usdFiles = contents.filter { $0.hasSuffix(".usdz") }
+            print("[AR DEBUG] USDZ files in bundle: \(usdFiles)")
+        }
+        
         let fallbackMesh = MeshResource.generateSphere(radius: 0.12)
         let fallbackMaterial = SimpleMaterial(
             color: UIColor(red: 0.22, green: 0.44, blue: 0.86, alpha: 1),
@@ -230,12 +270,37 @@ private struct PlanetARContainerView: UIViewRepresentable {
         return ModelEntity(mesh: fallbackMesh, materials: [fallbackMaterial])
     }
 
+    private func normalizedVisibleModel(from model: ModelEntity) -> ModelEntity {
+        let bounds = model.visualBounds(relativeTo: nil)
+        let extents = bounds.extents
+        let maxDimension = max(extents.x, max(extents.y, extents.z))
+
+        // Move model so its visual center is at the local origin.
+        model.position -= bounds.center
+
+        let container = ModelEntity()
+        container.addChild(model)
+
+        // Ensure tiny/invalid bounds do not cause invisible results.
+        let safeDimension = (maxDimension.isFinite && maxDimension > 0.0001) ? maxDimension : 1.0
+        // Keep default size moderate so textures stay crisp instead of over-stretched.
+        let targetDiameter: Float = 0.18
+        let uniformScale = targetDiameter / safeDimension
+        container.scale = SIMD3<Float>(repeating: uniformScale)
+
+        return container
+    }
+
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         weak var arView: ARView?
         var modelEntity: ModelEntity?
         private let onModelTapped: (String) -> Void
         private let modelKey: String
+        var initialScale: SIMD3<Float> = .one
+        var initialPosition: SIMD3<Float> = .zero
+        var initialOrientation: simd_quatf = simd_quatf(angle: 0, axis: [0, 1, 0])
         private var isDraggingModel = false
+        private var smoothedDragPosition: SIMD3<Float>?
         private var dragDistanceFromCamera: Float?
         private var minScale: Float = 0.05
         private var maxScale: Float = 2.0
@@ -247,8 +312,8 @@ private struct PlanetARContainerView: UIViewRepresentable {
 
         func setInitialScale(from scale: SIMD3<Float>) {
             let base = max(scale.x, 0.01)
-            minScale = base * 0.08
-            maxScale = base * 25
+            minScale = base * 0.2
+            maxScale = base * 8
         }
 
         @objc
@@ -264,6 +329,23 @@ private struct PlanetARContainerView: UIViewRepresentable {
         }
 
         @objc
+        func handleDoubleTap(_ recognizer: UITapGestureRecognizer) {
+            guard let modelEntity else { return }
+            modelEntity.setPosition(initialPosition, relativeTo: nil)
+            modelEntity.orientation = initialOrientation
+            modelEntity.scale = initialScale
+        }
+
+        @objc
+        func handleLongPress(_ recognizer: UILongPressGestureRecognizer) {
+            guard recognizer.state == .began, let arView, let modelEntity else { return }
+            let center = CGPoint(x: arView.bounds.midX, y: arView.bounds.midY)
+            guard let worldPoint = worldPositionAlongCameraRay(from: center, in: arView, distance: 0.65) else { return }
+            let targetTransform = Transform(scale: modelEntity.scale, rotation: modelEntity.orientation, translation: worldPoint)
+            modelEntity.move(to: targetTransform, relativeTo: nil, duration: 0.22, timingFunction: .easeInOut)
+        }
+
+        @objc
         func handlePan(_ recognizer: UIPanGestureRecognizer) {
             guard let arView, let modelEntity else { return }
 
@@ -273,6 +355,7 @@ private struct PlanetARContainerView: UIViewRepresentable {
             case .began:
                 if let hit = arView.entity(at: location), findModelEntity(startingAt: hit) != nil {
                     isDraggingModel = true
+                    smoothedDragPosition = modelEntity.position(relativeTo: nil)
                     if let cameraPosition = cameraWorldPosition(in: arView) {
                         let modelWorldPosition = modelEntity.position(relativeTo: nil)
                         dragDistanceFromCamera = simd_distance(modelWorldPosition, cameraPosition)
@@ -287,11 +370,15 @@ private struct PlanetARContainerView: UIViewRepresentable {
                     in: arView,
                     distance: max(dragDistanceFromCamera, 0.05)
                    ) {
-                    modelEntity.setPosition(worldPosition, relativeTo: nil)
+                    let current = smoothedDragPosition ?? modelEntity.position(relativeTo: nil)
+                    let smoothed = simd_mix(current, worldPosition, SIMD3<Float>(repeating: 0.22))
+                    smoothedDragPosition = smoothed
+                    modelEntity.setPosition(smoothed, relativeTo: nil)
                 }
             case .ended, .cancelled, .failed:
                 isDraggingModel = false
                 dragDistanceFromCamera = nil
+                smoothedDragPosition = nil
             default:
                 break
             }
@@ -303,8 +390,10 @@ private struct PlanetARContainerView: UIViewRepresentable {
             guard recognizer.state == .began || recognizer.state == .changed else { return }
 
             let current = modelEntity.scale.x
-            let updated = max(min(current * Float(recognizer.scale), maxScale), minScale)
-            modelEntity.scale = SIMD3<Float>(repeating: updated)
+            let pinchDelta = pow(Float(recognizer.scale), 0.65)
+            let target = max(min(current * pinchDelta, maxScale), minScale)
+            let smoothed = current + (target - current) * 0.38
+            modelEntity.scale = SIMD3<Float>(repeating: smoothed)
             recognizer.scale = 1
         }
 
@@ -313,9 +402,9 @@ private struct PlanetARContainerView: UIViewRepresentable {
             guard let modelEntity else { return }
             guard recognizer.state == .began || recognizer.state == .changed else { return }
 
-            let delta = Float(recognizer.rotation)
-            let deltaRotation = simd_quatf(angle: delta, axis: [0, 1, 0])
-            modelEntity.orientation = deltaRotation * modelEntity.orientation
+            let delta = Float(recognizer.rotation) * 0.7
+            let targetOrientation = simd_quatf(angle: delta, axis: [0, 1, 0]) * modelEntity.orientation
+            modelEntity.orientation = simd_slerp(modelEntity.orientation, targetOrientation, 0.45)
             recognizer.rotation = 0
         }
 

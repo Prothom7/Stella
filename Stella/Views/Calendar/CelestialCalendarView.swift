@@ -81,7 +81,7 @@ struct CelestialCalendarView: View {
 
     private var introCard: some View {
         VStack(alignment: .center, spacing: 8) {
-            Text("\(year) Sky Highlights")
+            Text("2026 Sky Highlights")
                 .font(.system(size: 30, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
@@ -93,14 +93,6 @@ struct CelestialCalendarView: View {
         }
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.black.opacity(0.46))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(.white.opacity(0.3), lineWidth: 1)
-        )
     }
 
     private func loadEventsFromFirestore() {
@@ -170,7 +162,7 @@ private struct MonthCalendarPage: View {
     @State private var isReminderAlertPresented = false
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 7)
-    private let weekdaySymbols = ["S", "M", "T", "W", "T", "F", "S"]
+    private let weekdaySymbols = ["S", "M", "T", "W", "Th", "F", "Sa"]
 
     private var eventsByDay: [Int: [CelestialEvent]] {
         Dictionary(grouping: section.events) { $0.daySort }
