@@ -1,9 +1,5 @@
 # Stella
 
-<p align="center">
-  <img src="docs/readme-assets/stella-contact-collage.jpg" alt="Stella feature collage" width="100%">
-</p>
-
 Stella is an iOS astronomy companion app built with SwiftUI. It combines secure sign-in, a dashboard hub, weather-aware sky planning, live astronomy news, guided learning screens, and immersive AR experiences in one polished app.
 
 ## Project Snapshot
