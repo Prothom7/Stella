@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseAuth
+import FirebaseFirestore
 
 struct AuthScreenView: View {
     @State private var authMode: AuthMode = .login
@@ -15,6 +16,9 @@ struct AuthScreenView: View {
     @State private var isLoading = false
     @State private var authMessage = ""
     @State private var authMessageIsError = false
+    @State private var showsForgotPasswordPrompt = false
+    @State private var forgotPasswordEmail = ""
+    @State private var isSubmittingResetRequest = false
 
     var body: some View {
         GeometryReader { geo in
@@ -96,6 +100,22 @@ struct AuthScreenView: View {
                     horizontalInsetTrailing: geo.safeAreaInsets.trailing
                 )
             }
+        }
+        .alert("Reset Password", isPresented: $showsForgotPasswordPrompt) {
+            TextField("name@email.com", text: $forgotPasswordEmail)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+
+            Button("Cancel", role: .cancel) {
+                isSubmittingResetRequest = false
+            }
+
+            Button(isSubmittingResetRequest ? "Submitting..." : "Submit Request") {
+                submitPasswordResetRequest()
+            }
+            .disabled(isSubmittingResetRequest)
+        } message: {
+            Text("Enter your account email. We will submit a reset request without sending email.")
         }
     }
 
@@ -193,10 +213,15 @@ struct AuthScreenView: View {
             .disabled(isLoading)
             .opacity(isLoading ? 0.85 : 1)
 
-            Button("Forgot password?") {}
+            Button {
+                openForgotPasswordPrompt()
+            } label: {
+                Text(isSubmittingResetRequest ? "Submitting reset request..." : "Forgot password?")
+            }
                 .font(.system(size: 14, weight: .medium, design: .default))
                 .foregroundStyle(.white.opacity(0.92))
                 .frame(maxWidth: .infinity, alignment: .center)
+                .disabled(isLoading || isSubmittingResetRequest)
         }
         .padding(cardPadding)
         .background(glassCardBackground(corner: cardCorner))
@@ -400,6 +425,53 @@ struct AuthScreenView: View {
     private func setAuthMessage(_ message: String, isError: Bool) {
         authMessage = message
         authMessageIsError = isError
+    }
+
+    private func openForgotPasswordPrompt() {
+        forgotPasswordEmail = loginEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        showsForgotPasswordPrompt = true
+    }
+
+    private func submitPasswordResetRequest() {
+        let email = forgotPasswordEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !email.isEmpty else {
+            setAuthMessage("Enter your email to reset your password.", isError: true)
+            return
+        }
+
+        guard isLikelyValidEmail(email) else {
+            setAuthMessage("Enter a valid email address.", isError: true)
+            return
+        }
+
+        isSubmittingResetRequest = true
+        let normalizedEmail = email.lowercased()
+        let requestData: [String: Any] = [
+            "email": normalizedEmail,
+            "status": "pending",
+            "createdAt": FieldValue.serverTimestamp(),
+            "source": "ios_app"
+        ]
+
+        Firestore.firestore().collection("password_reset_requests").addDocument(data: requestData) { error in
+            isSubmittingResetRequest = false
+
+            if let error {
+                setAuthMessage(error.localizedDescription, isError: true)
+                return
+            }
+
+            showsForgotPasswordPrompt = false
+            setAuthMessage("Reset request submitted for \(normalizedEmail).", isError: false)
+        }
+    }
+
+    private func isLikelyValidEmail(_ email: String) -> Bool {
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let atIndex = trimmed.firstIndex(of: "@") else { return false }
+        let domainPart = trimmed[trimmed.index(after: atIndex)...]
+        return domainPart.contains(".")
     }
 }
 

@@ -1,11 +1,17 @@
 import SwiftUI
 import FirebaseFirestore
+import CoreLocation
+import Combine
 
 struct DashboardView: View {
     private let lessonsByCategory = Dictionary(grouping: LessonTopic.sampleLessons, by: \ .category)
     @State private var selectedTab: DashboardTab = .learning
     @State private var lessonImageURLsByName: [String: String] = [:]
-    @State private var didTryLoadLessonImages = false
+    @StateObject private var locationManager = DashboardLocationManager()
+    @State private var weatherSnapshot: DashboardWeatherSnapshot?
+    @State private var isWeatherLoading = false
+    @State private var weatherErrorMessage: String?
+    @State private var lastWeatherCoordinateKey: String?
 
     var body: some View {
         NavigationStack {
@@ -28,6 +34,9 @@ struct DashboardView: View {
 
                     topNavBar
 
+                    weatherCard
+                        .padding(.horizontal, 16)
+
                     learningContent
                         .padding(.horizontal, 16)
                 }
@@ -35,7 +44,7 @@ struct DashboardView: View {
             }
             .background {
                 ZStack {
-                    Image("img_10")
+                    Image("img_11")
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                         .ignoresSafeArea()
@@ -50,9 +59,12 @@ struct DashboardView: View {
                 .allowsHitTesting(false)
             }
             .onAppear {
-                guard !didTryLoadLessonImages else { return }
-                didTryLoadLessonImages = true
                 loadLessonImagesFromFirestore()
+                locationManager.start()
+            }
+            .onReceive(locationManager.$location) { location in
+                guard let location else { return }
+                fetchWeather(for: location)
             }
             .navigationDestination(for: LessonTopic.self) { lesson in
                 LessonDetailView(lesson: lesson)
@@ -195,11 +207,24 @@ struct DashboardView: View {
     }
 
     private func remoteImageURL(for lesson: LessonTopic) -> String? {
-        for candidate in lesson.imageLookupNames {
-            if let url = lessonImageURLsByName[normalizedLessonKey(candidate)] {
+        let candidates = lesson.imageLookupNames + [lesson.title]
+
+        for candidate in candidates {
+            let candidateKey = normalizedLessonKey(candidate)
+            if let url = lessonImageURLsByName[candidateKey] {
                 return url
             }
         }
+
+        for candidate in candidates {
+            let candidateKey = normalizedLessonKey(candidate)
+            if let looseMatch = lessonImageURLsByName.first(where: { key, _ in
+                key.contains(candidateKey) || candidateKey.contains(key)
+            }) {
+                return looseMatch.value
+            }
+        }
+
         return nil
     }
 
@@ -207,6 +232,164 @@ struct DashboardView: View {
         raw
             .lowercased()
             .replacingOccurrences(of: "[^a-z0-9]", with: "", options: .regularExpression)
+    }
+
+    private var weatherCard: some View {
+        VStack(alignment: .center, spacing: 12) {
+            Text("Local Sky")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.82))
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.center)
+
+            if let weatherSnapshot {
+                VStack(alignment: .center, spacing: 8) {
+                    Image(systemName: weatherSnapshot.symbolName)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.94))
+                        .frame(width: 38, height: 38)
+                        .background(Color.white.opacity(0.1), in: Circle())
+
+                    VStack(alignment: .center, spacing: 2) {
+                        Text("\(weatherSnapshot.temperatureC)°")
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .monospacedDigit()
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .multilineTextAlignment(.center)
+
+                        Text(weatherSnapshot.summary)
+                            .font(.system(size: 14, weight: .medium, design: .default))
+                            .foregroundStyle(.white.opacity(0.88))
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    metricChip(label: "Cloud", value: "\(weatherSnapshot.cloudCover)%")
+                    metricChip(label: "Wind", value: "\(weatherSnapshot.windSpeedKmh) km/h")
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+            } else if isWeatherLoading {
+                HStack(spacing: 8) {
+                    ProgressView().tint(.white)
+                    Text("Fetching weather...")
+                        .font(.system(size: 13, weight: .medium, design: .default))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+            } else if let weatherErrorMessage {
+                Text(weatherErrorMessage)
+                    .font(.system(size: 13, weight: .medium, design: .default))
+                    .foregroundStyle(.white.opacity(0.84))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .multilineTextAlignment(.center)
+            }
+
+            Text(locationManager.statusText)
+                .font(.system(size: 12, weight: .medium, design: .default))
+                .foregroundStyle(.white.opacity(0.72))
+                .frame(maxWidth: .infinity, alignment: .center)
+                .multilineTextAlignment(.center)
+
+            if locationManager.shouldShowRequestButton {
+                Button {
+                    locationManager.requestPermission()
+                } label: {
+                    Text("Enable Location")
+                        .font(.system(size: 12, weight: .semibold, design: .default))
+                        .foregroundStyle(.white.opacity(0.94))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(.white.opacity(0.22), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(14)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(.white.opacity(0.14), lineWidth: 1)
+        )
+    }
+
+    private func metricChip(label: String, value: String) -> some View {
+        HStack(spacing: 5) {
+            Text(label)
+                .font(.system(size: 11, weight: .medium, design: .default))
+                .foregroundStyle(.white.opacity(0.7))
+            Text(value)
+                .font(.system(size: 12, weight: .semibold, design: .default))
+                .foregroundStyle(.white.opacity(0.92))
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+            .background(Color.white.opacity(0.08), in: Capsule())
+    }
+
+    private func fetchWeather(for location: CLLocation) {
+        let coordinateKey = String(format: "%.2f,%.2f", location.coordinate.latitude, location.coordinate.longitude)
+        guard coordinateKey != lastWeatherCoordinateKey else { return }
+
+        lastWeatherCoordinateKey = coordinateKey
+        isWeatherLoading = true
+        weatherErrorMessage = nil
+
+        Task {
+            do {
+                let latitude = location.coordinate.latitude
+                let longitude = location.coordinate.longitude
+                let endpoint = String(
+                    format: "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=temperature_2m,weather_code,cloud_cover,wind_speed_10m&timezone=auto",
+                    latitude,
+                    longitude
+                )
+
+                guard let url = URL(string: endpoint) else {
+                    await MainActor.run {
+                        isWeatherLoading = false
+                        weatherErrorMessage = "Could not build weather request URL."
+                    }
+                    return
+                }
+
+                let (data, response) = try await URLSession.shared.data(from: url)
+                guard let httpResponse = response as? HTTPURLResponse,
+                      (200...299).contains(httpResponse.statusCode) else {
+                    await MainActor.run {
+                        isWeatherLoading = false
+                        weatherErrorMessage = "Weather service is currently unavailable."
+                    }
+                    return
+                }
+
+                let decoded = try JSONDecoder().decode(OpenMeteoCurrentResponse.self, from: data)
+                let snapshot = DashboardWeatherSnapshot(
+                    temperatureC: Int(decoded.current.temperature_2m.rounded()),
+                    weatherCode: decoded.current.weather_code,
+                    cloudCover: Int(decoded.current.cloud_cover.rounded()),
+                    windSpeedKmh: Int(decoded.current.wind_speed_10m.rounded())
+                )
+
+                await MainActor.run {
+                    weatherSnapshot = snapshot
+                    isWeatherLoading = false
+                    weatherErrorMessage = nil
+                }
+            } catch {
+                await MainActor.run {
+                    isWeatherLoading = false
+                    weatherErrorMessage = "Unable to fetch live weather right now."
+                }
+            }
+        }
     }
 }
 
@@ -238,6 +421,129 @@ private enum DashboardTab: CaseIterable {
         case .finder: return "sparkles"
         case .profile: return "person"
         }
+    }
+}
+
+private struct OpenMeteoCurrentResponse: Decodable {
+    let current: OpenMeteoCurrent
+}
+
+private struct OpenMeteoCurrent: Decodable {
+    let temperature_2m: Double
+    let weather_code: Int
+    let cloud_cover: Double
+    let wind_speed_10m: Double
+}
+
+private struct DashboardWeatherSnapshot {
+    let temperatureC: Int
+    let weatherCode: Int
+    let cloudCover: Int
+    let windSpeedKmh: Int
+
+    var summary: String {
+        switch weatherCode {
+        case 0: return "Clear sky"
+        case 1, 2, 3: return "Partly cloudy"
+        case 45, 48: return "Foggy"
+        case 51, 53, 55, 56, 57: return "Drizzle"
+        case 61, 63, 65, 66, 67: return "Rain"
+        case 71, 73, 75, 77: return "Snow"
+        case 80, 81, 82: return "Rain showers"
+        case 85, 86: return "Snow showers"
+        case 95, 96, 99: return "Thunderstorm"
+        default: return "Variable conditions"
+        }
+    }
+
+    var symbolName: String {
+        switch weatherCode {
+        case 0: return "sun.max.fill"
+        case 1, 2: return "cloud.sun.fill"
+        case 3: return "cloud.fill"
+        case 45, 48: return "cloud.fog.fill"
+        case 51, 53, 55, 56, 57: return "cloud.drizzle.fill"
+        case 61, 63, 65, 80, 81, 82: return "cloud.rain.fill"
+        case 66, 67: return "cloud.sleet.fill"
+        case 71, 73, 75, 77, 85, 86: return "cloud.snow.fill"
+        case 95, 96, 99: return "cloud.bolt.rain.fill"
+        default: return "cloud.fill"
+        }
+    }
+}
+
+private final class DashboardLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+    @Published private(set) var location: CLLocation?
+    @Published private(set) var authorizationStatus: CLAuthorizationStatus
+
+    private let manager = CLLocationManager()
+
+    override init() {
+        authorizationStatus = manager.authorizationStatus
+        super.init()
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyKilometer
+    }
+
+    var shouldShowRequestButton: Bool {
+        authorizationStatus == .notDetermined || authorizationStatus == .denied || authorizationStatus == .restricted
+    }
+
+    var statusText: String {
+        switch authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            if let location {
+                return String(format: "Using latitude %.2f, longitude %.2f", location.coordinate.latitude, location.coordinate.longitude)
+            }
+            return "Determining your location for local weather..."
+        case .notDetermined:
+            return "Enable location to show live weather for your sky conditions."
+        case .denied, .restricted:
+            return "Location is off. Turn it on to personalize weather visibility."
+        @unknown default:
+            return "Location status unavailable right now."
+        }
+    }
+
+    func start() {
+        switch authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            manager.startUpdatingLocation()
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+        case .denied, .restricted:
+            break
+        @unknown default:
+            break
+        }
+    }
+
+    func requestPermission() {
+        if authorizationStatus == .notDetermined {
+            manager.requestWhenInUseAuthorization()
+        } else if authorizationStatus == .authorizedAlways || authorizationStatus == .authorizedWhenInUse {
+            manager.startUpdatingLocation()
+        }
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        DispatchQueue.main.async {
+            self.authorizationStatus = manager.authorizationStatus
+            if self.authorizationStatus == .authorizedWhenInUse || self.authorizationStatus == .authorizedAlways {
+                manager.startUpdatingLocation()
+            }
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        DispatchQueue.main.async {
+            self.location = locations.last
+            manager.stopUpdatingLocation()
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("Dashboard location error: \(error.localizedDescription)")
     }
 }
 
@@ -402,7 +708,7 @@ private struct LessonDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .background {
             ZStack {
-                Image("img_09")
+                Image("img_10")
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .ignoresSafeArea()
@@ -509,6 +815,108 @@ private struct LessonTopic: Hashable, Identifiable {
             category: .planets
         ),
         LessonTopic(
+            id: "mercury",
+            title: "Mercury",
+            imageLookupNames: ["Mercury"],
+            subtitle: "The smallest and innermost planet.",
+            summary: "Mercury is a rocky world with extreme temperature swings and a heavily cratered surface shaped by impacts.",
+            facts: [
+                "A Mercurian year is just 88 Earth days.",
+                "Mercury has almost no atmosphere to trap heat.",
+                "It has no natural moons."
+            ],
+            icon: "circle.fill",
+            cardImageName: "img_07",
+            tint: Color.gray,
+            arModelFileName: "mercury.usdz",
+            category: .planets
+        ),
+        LessonTopic(
+            id: "venus",
+            title: "Venus",
+            imageLookupNames: ["Venus"],
+            subtitle: "Earth-size planet with a runaway greenhouse climate.",
+            summary: "Venus is wrapped in thick carbon dioxide clouds and has the hottest surface of any planet in our solar system.",
+            facts: [
+                "Venus rotates in the opposite direction of most planets.",
+                "Its surface temperature is around 465 C on average.",
+                "A Venus day is longer than its year."
+            ],
+            icon: "sun.haze.fill",
+            cardImageName: "img_08",
+            tint: Color.yellow,
+            arModelFileName: "venus.usdz",
+            category: .planets
+        ),
+        LessonTopic(
+            id: "jupiter",
+            title: "Jupiter",
+            imageLookupNames: ["Jupiter", "Jupitar"],
+            subtitle: "The largest planet and a giant storm world.",
+            summary: "Jupiter is a gas giant with strong magnetic fields, many moons, and the famous Great Red Spot storm.",
+            facts: [
+                "Jupiter has at least 90 known moons.",
+                "Its Great Red Spot is a long-lived giant storm.",
+                "It is more than 11 times wider than Earth."
+            ],
+            icon: "hurricane",
+            cardImageName: "img_09",
+            tint: Color.orange,
+            arModelFileName: "jupiter.usdz",
+            category: .planets
+        ),
+        LessonTopic(
+            id: "saturn",
+            title: "Saturn",
+            imageLookupNames: ["Saturn"],
+            subtitle: "The ringed giant with icy ring particles.",
+            summary: "Saturn is a gas giant known for its bright ring system made of ice and rock fragments orbiting the planet.",
+            facts: [
+                "Saturn's rings are mostly water ice.",
+                "A day on Saturn is about 10.7 Earth hours.",
+                "Saturn has dozens of known moons, including Titan."
+            ],
+            icon: "circle.dashed",
+            cardImageName: "img_10",
+            tint: Color.brown,
+            arModelFileName: "saturn.usdz",
+            category: .planets
+        ),
+        LessonTopic(
+            id: "uranus",
+            title: "Uranus",
+            imageLookupNames: ["Uranus"],
+            subtitle: "An ice giant that spins on its side.",
+            summary: "Uranus has a unique sideways tilt, faint rings, and a cold atmosphere rich in hydrogen, helium, and methane.",
+            facts: [
+                "Uranus rotates with an axial tilt of about 98 degrees.",
+                "Methane gives Uranus its blue-green color.",
+                "It takes 84 Earth years to orbit the Sun."
+            ],
+            icon: "wind",
+            cardImageName: "img_01",
+            tint: Color.cyan,
+            arModelFileName: "uranus.usdz",
+            category: .planets
+        ),
+        LessonTopic(
+            id: "neptune",
+            title: "Neptune",
+            imageLookupNames: ["Neptune"],
+            subtitle: "Distant ice giant with powerful winds.",
+            summary: "Neptune is the farthest known major planet and features dynamic weather with some of the fastest winds in the solar system.",
+            facts: [
+                "Neptune's winds can exceed 2,000 km/h.",
+                "It has a large moon called Triton.",
+                "Neptune takes 165 Earth years to orbit the Sun."
+            ],
+            icon: "aqi.medium",
+            cardImageName: "img_02",
+            tint: Color.blue,
+            arModelFileName: "neptune.usdz",
+            category: .planets
+        ),
+        LessonTopic(
             id: "sun",
             title: "The Sun",
             imageLookupNames: ["Sun", "The Sun"],
@@ -558,6 +966,74 @@ private struct LessonTopic: Hashable, Identifiable {
             tint: Color.indigo,
             arModelFileName: "ISS_stationary.usdz",
             category: .manMadeMissions
+        ),
+        LessonTopic(
+            id: "hubble",
+            title: "Hubble Telescope",
+            imageLookupNames: ["Hubble", "Hubble Telescope", "Hubble Space Telescope"],
+            subtitle: "Legendary space observatory above Earth's atmosphere.",
+            summary: "The Hubble Space Telescope has captured deep-space images that reshaped astronomy and measured cosmic expansion.",
+            facts: [
+                "Hubble launched in 1990 aboard Space Shuttle Discovery.",
+                "It orbits Earth about every 95 minutes.",
+                "Its observations helped refine the age of the universe."
+            ],
+            icon: "telescope",
+            cardImageName: "img_07",
+            tint: Color.teal,
+            arModelFileName: "hubble.usdz",
+            category: .manMadeMissions
+        ),
+        LessonTopic(
+            id: "curiosity",
+            title: "Curiosity Rover",
+            imageLookupNames: ["Curiosity", "Curiosity Rover"],
+            subtitle: "Mars rover exploring Gale Crater.",
+            summary: "Curiosity studies Martian geology and climate, searching for signs that ancient Mars could have supported microbial life.",
+            facts: [
+                "Curiosity landed on Mars in 2012.",
+                "It is powered by a radioisotope generator.",
+                "Its onboard lab analyzes rocks and atmospheric samples."
+            ],
+            icon: "car.side.fill",
+            cardImageName: "img_08",
+            tint: Color.orange,
+            arModelFileName: "curiosity.usdz",
+            category: .manMadeMissions
+        ),
+        LessonTopic(
+            id: "explorer-1",
+            title: "Explorer 1",
+            imageLookupNames: ["Explorer 1", "Explorer-1"],
+            subtitle: "America's first satellite and a space age milestone.",
+            summary: "Explorer 1 was the first U.S. satellite and helped discover the Van Allen radiation belts around Earth.",
+            facts: [
+                "Explorer 1 launched in January 1958.",
+                "It carried scientific instruments designed by James Van Allen's team.",
+                "Its findings changed how we understand Earth's near-space environment."
+            ],
+            icon: "dot.radiowaves.left.and.right",
+            cardImageName: "img_09",
+            tint: Color.indigo,
+            arModelFileName: "explorer1.usdz",
+            category: .manMadeMissions
+        ),
+        LessonTopic(
+            id: "itokawa",
+            title: "Asteroid Itokawa",
+            imageLookupNames: ["Itokawa", "Asteroid Itokawa"],
+            subtitle: "Small near-Earth asteroid visited by Hayabusa.",
+            summary: "Itokawa is an irregular rubble-pile asteroid that provided key insight into asteroid structure and sample-return missions.",
+            facts: [
+                "Itokawa is about 500 meters long.",
+                "Japan's Hayabusa mission returned samples from Itokawa.",
+                "Its shape looks like two rocky lobes joined together."
+            ],
+            icon: "aqi.low",
+            cardImageName: "img_10",
+            tint: Color.gray,
+            arModelFileName: "itokawa.usdz",
+            category: .celestialObjects
         ),
         LessonTopic(
             id: "nasa-missions",
